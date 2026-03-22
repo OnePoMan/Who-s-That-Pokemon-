@@ -25,7 +25,27 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {/* Pokeball background pattern */}
+        <div className="pokeball-bg" />
+
+        {/* Pokedex frame */}
+        <div className="relative z-10 flex-1 flex flex-col max-w-2xl mx-auto w-full p-2 sm:p-3">
+          <div className="pokedex-frame flex-1 flex flex-col">
+            {/* Indicator lights */}
+            <div className="pokedex-lights">
+              <div className="pokedex-light blue" />
+              <div className="pokedex-light red" />
+              <div className="pokedex-light green" />
+            </div>
+
+            {/* Screen */}
+            <div className="pokedex-screen flex-1 flex flex-col">
+              {children}
+            </div>
+          </div>
+        </div>
+      </body>
     </html>
   );
 }

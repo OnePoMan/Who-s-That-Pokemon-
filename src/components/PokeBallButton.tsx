@@ -10,15 +10,15 @@ interface PokeBallButtonProps {
 }
 
 const variantStyles = {
-  red: 'bg-pokemon-red hover:bg-pokemon-red-dark text-white',
-  blue: 'bg-pokemon-blue hover:bg-pokemon-blue-light text-white',
-  gray: 'bg-pokemon-gray hover:bg-pokemon-dark text-white',
+  red: 'bg-gradient-to-b from-pokemon-red to-pokemon-red-dark text-white border-pokemon-red-dark hover:from-pokemon-red-light hover:to-pokemon-red',
+  blue: 'bg-gradient-to-b from-pokemon-blue to-[#2a3aa0] text-white border-[#2a3aa0] hover:from-pokemon-blue-light hover:to-pokemon-blue',
+  gray: 'bg-gradient-to-b from-gray-400 to-gray-500 text-white border-gray-600 hover:from-gray-300 hover:to-gray-400',
 };
 
 const sizeStyles = {
   sm: 'px-4 py-2 text-sm',
-  md: 'px-6 py-3 text-base',
-  lg: 'px-8 py-4 text-lg',
+  md: 'px-6 py-2.5 text-base',
+  lg: 'px-8 py-3 text-lg',
 };
 
 export default function PokeBallButton({
@@ -36,11 +36,12 @@ export default function PokeBallButton({
       className={`
         ${variantStyles[variant]}
         ${sizeStyles[size]}
-        rounded-full font-bold
-        transition-all duration-200
-        shadow-lg hover:shadow-xl
-        active:scale-95
-        disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
+        font-body font-bold
+        rounded-xl border-2 border-b-4
+        transition-all duration-150
+        shadow-md hover:shadow-lg
+        active:scale-95 active:border-b-2 active:translate-y-[2px]
+        disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:active:translate-y-0
         ${className}
       `}
     >

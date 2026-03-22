@@ -20,7 +20,6 @@ export default function MemorizePhase({ pokemon, drawer, guesser, isLocalMode, o
   const [readyClicked, setReadyClicked] = useState(false);
 
   useEffect(() => {
-    // In local mode: show "hand device to drawer" message first
     if (isLocalMode && !readyClicked) return;
 
     setShowPokemon(true);
@@ -46,22 +45,24 @@ export default function MemorizePhase({ pokemon, drawer, guesser, isLocalMode, o
 
   if (isLocalMode && !readyClicked) {
     return (
-      <div className="flex flex-col items-center gap-6 text-center animate-fade-in">
+      <div className="flex flex-col items-center gap-5 text-center animate-fade-in">
         <div className="flex items-center gap-3">
           <AvatarIcon avatarId={drawer.avatarId} size="lg" />
-          <div>
-            <p className="text-lg font-bold text-pokemon-dark">{drawer.nickname}&apos;s turn to draw!</p>
-            <p className="text-sm text-pokemon-gray">
+          <div className="text-left">
+            <p className="text-base font-bold text-pokemon-dark font-body">{drawer.nickname}&apos;s turn to draw!</p>
+            <p className="text-xs text-pokemon-gray font-body">
               Hand the device to {drawer.nickname}
             </p>
           </div>
         </div>
-        <div className="bg-yellow-50 border-2 border-pokemon-yellow rounded-lg p-4 max-w-xs">
-          <p className="text-sm text-pokemon-dark">
-            <span className="font-bold">{guesser.nickname}</span> should look away!
-            <br />
-            Only the drawer should see the Pokemon.
-          </p>
+        <div className="pokemon-card w-full max-w-xs">
+          <div className="pokemon-card-body text-center">
+            <p className="text-sm text-pokemon-dark font-body">
+              <span className="font-bold">{guesser.nickname}</span> should look away!
+              <br />
+              <span className="text-xs text-pokemon-gray">Only the drawer should see the Pokemon.</span>
+            </p>
+          </div>
         </div>
         <PokeBallButton onClick={() => setReadyClicked(true)} variant="red" size="lg">
           I&apos;m {drawer.nickname} - Show me!
@@ -72,17 +73,17 @@ export default function MemorizePhase({ pokemon, drawer, guesser, isLocalMode, o
 
   return (
     <div className="flex flex-col items-center gap-4 animate-fade-in">
-      <h2 className="text-2xl font-black text-pokemon-dark">Memorize this Pok&eacute;mon!</h2>
-      <p className="text-pokemon-gray text-sm">You have {countdown} seconds</p>
+      <h2 className="font-pixel text-sm text-pokemon-dark text-center">Memorize this Pok&eacute;mon!</h2>
+      <p className="text-pokemon-gray text-xs font-body">You have {countdown} seconds</p>
 
       <div className="animate-bounce-in">
-        <PokemonSilhouette imageUrl={pokemon.artworkUrl} revealed size={250} />
+        <PokemonSilhouette imageUrl={pokemon.artworkUrl} revealed size={220} />
       </div>
 
-      <p className="text-xl font-bold text-pokemon-blue">{pokemon.name}</p>
+      <p className="font-pixel text-sm text-pokemon-blue">{pokemon.name}</p>
 
       {/* Countdown ring */}
-      <div className="relative w-16 h-16">
+      <div className="relative w-14 h-14">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
           <circle cx="18" cy="18" r="16" fill="none" stroke="#e5e7eb" strokeWidth="3" />
           <circle
@@ -95,7 +96,7 @@ export default function MemorizePhase({ pokemon, drawer, guesser, isLocalMode, o
             className="transition-all duration-1000 ease-linear"
           />
         </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-xl font-bold text-pokemon-dark">
+        <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-pokemon-dark font-body">
           {countdown}
         </span>
       </div>

@@ -11,8 +11,8 @@ export default function Timer({ timeRemaining, totalTime }: TimerProps) {
   const isCritical = timeRemaining <= 5;
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+    <div className="flex items-center gap-2">
+      <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden border border-pokemon-dark/20">
         <div
           className={`h-full rounded-full transition-all duration-1000 ease-linear ${
             isCritical
@@ -25,7 +25,7 @@ export default function Timer({ timeRemaining, totalTime }: TimerProps) {
         />
       </div>
       <span
-        className={`text-2xl font-bold min-w-[3ch] text-right tabular-nums ${
+        className={`text-lg font-bold min-w-[3ch] text-right tabular-nums font-body ${
           isCritical ? 'text-pokemon-red timer-warning' : isWarning ? 'text-pokemon-yellow-dark' : 'text-pokemon-dark'
         }`}
       >

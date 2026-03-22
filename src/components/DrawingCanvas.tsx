@@ -128,7 +128,7 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
 
   return (
     <div ref={containerRef} className="flex flex-col items-center gap-3 w-full">
-      <div className="relative w-full max-w-[600px] aspect-square bg-white rounded-lg shadow-lg overflow-hidden border-4 border-pokemon-dark">
+      <div className="relative w-full max-w-[600px] aspect-square bg-white rounded-xl shadow-lg overflow-hidden border-3 border-pokemon-dark">
         <canvas
           ref={canvasRef}
           className="w-full h-full cursor-crosshair"
@@ -139,45 +139,33 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
       {!readOnly && (
         <div className="w-full max-w-[600px] space-y-2">
           {/* Tools */}
-          <div className="flex gap-2 justify-center flex-wrap">
+          <div className="flex gap-1.5 justify-center flex-wrap">
             <button
               onClick={() => selectTool('pen')}
-              className={`px-3 py-1.5 rounded-full text-sm font-bold transition-all ${
-                currentTool === 'pen'
-                  ? 'bg-pokemon-blue text-white scale-105'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              className={`pokemon-toggle px-3 py-1.5 text-xs font-body ${currentTool === 'pen' ? 'active' : ''}`}
             >
               Pen
             </button>
             <button
               onClick={() => selectTool('eraser')}
-              className={`px-3 py-1.5 rounded-full text-sm font-bold transition-all ${
-                currentTool === 'eraser'
-                  ? 'bg-pokemon-blue text-white scale-105'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              className={`pokemon-toggle px-3 py-1.5 text-xs font-body ${currentTool === 'eraser' ? 'active' : ''}`}
             >
               Eraser
             </button>
             <button
               onClick={() => selectTool('fill')}
-              className={`px-3 py-1.5 rounded-full text-sm font-bold transition-all ${
-                currentTool === 'fill'
-                  ? 'bg-pokemon-blue text-white scale-105'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              className={`pokemon-toggle px-3 py-1.5 text-xs font-body ${currentTool === 'fill' ? 'active' : ''}`}
             >
               Fill
             </button>
-            <div className="w-px bg-gray-300 mx-1" />
-            <button onClick={handleUndo} className="px-3 py-1.5 rounded-full text-sm font-bold bg-gray-200 text-gray-700 hover:bg-gray-300 transition-all">
+            <div className="w-px bg-gray-300 mx-0.5" />
+            <button onClick={handleUndo} className="pokemon-toggle px-3 py-1.5 text-xs font-body">
               Undo
             </button>
-            <button onClick={handleRedo} className="px-3 py-1.5 rounded-full text-sm font-bold bg-gray-200 text-gray-700 hover:bg-gray-300 transition-all">
+            <button onClick={handleRedo} className="pokemon-toggle px-3 py-1.5 text-xs font-body">
               Redo
             </button>
-            <button onClick={handleClear} className="px-3 py-1.5 rounded-full text-sm font-bold bg-pokemon-red text-white hover:bg-pokemon-red-dark transition-all">
+            <button onClick={handleClear} className="px-3 py-1.5 rounded-full text-xs font-bold font-body bg-pokemon-red text-white border-2 border-pokemon-red-dark hover:bg-pokemon-red-dark transition-all">
               Clear
             </button>
           </div>
