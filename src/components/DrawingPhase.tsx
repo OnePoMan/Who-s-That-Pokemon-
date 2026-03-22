@@ -20,6 +20,7 @@ interface DrawingPhaseProps {
   isDrawer: boolean;
   onGuess: (text: string) => void;
   onCorrectGuess: () => void;
+  onSkip: () => void;
   onTimeUp: () => void;
   onDrawEvent?: (event: DrawEvent) => void;
   canvasManagerRef?: React.MutableRefObject<CanvasManager | null>;
@@ -36,12 +37,14 @@ export default function DrawingPhase({
   isDrawer,
   onGuess,
   onCorrectGuess,
+  onSkip,
   onTimeUp,
   onDrawEvent,
   canvasManagerRef,
 }: DrawingPhaseProps) {
   const [localStep, setLocalStep] = useState<'drawing' | 'guessing'>('drawing');
   const [passedDevice, setPassedDevice] = useState(false);
+  const [savedImageData, setSavedImageData] = useState<ImageData | null>(null);
   const internalCanvasRef = useRef<CanvasManager | null>(null);
   const effectiveCanvasRef = canvasManagerRef || internalCanvasRef;
   const hasTimedUp = useRef(false);
@@ -55,16 +58,19 @@ export default function DrawingPhase({
 
   const handleLocalGuess = useCallback((text: string) => {
     onGuess(text);
-    // Check if guess matches pokemon name (case-insensitive)
     if (text.toLowerCase().trim() === pokemon.name.toLowerCase().trim()) {
       onCorrectGuess();
     }
   }, [onGuess, onCorrectGuess, pokemon.name]);
 
   const handlePassToGuesser = useCallback(() => {
+    // Save the current canvas image data before switching views
+    if (effectiveCanvasRef.current) {
+      setSavedImageData(effectiveCanvasRef.current.getImageData());
+    }
     setLocalStep('guessing');
     setPassedDevice(false);
-  }, []);
+  }, [effectiveCanvasRef]);
 
   // LOCAL MODE: Drawer draws, then passes device to guesser
   if (isLocalMode) {
@@ -91,7 +97,7 @@ export default function DrawingPhase({
       );
     }
 
-    // Guessing step
+    // Guessing step — pass device screen
     if (!passedDevice) {
       return (
         <div className="flex flex-col items-center gap-6 animate-fade-in">
@@ -109,6 +115,7 @@ export default function DrawingPhase({
       );
     }
 
+    // Guessing step — show drawing with Correct/Skip buttons (no text box)
     return (
       <div className="flex flex-col gap-3 w-full animate-fade-in">
         <div className="flex items-center justify-between">
@@ -119,13 +126,27 @@ export default function DrawingPhase({
           <Timer timeRemaining={timeRemaining} totalTime={timerDuration} />
         </div>
 
-        <DrawingCanvas readOnly canvasManagerRef={effectiveCanvasRef} />
-        <ChatPanel messages={chatMessages} onSend={handleLocalGuess} placeholder="Type the Pokemon name..." />
+        <DrawingCanvas readOnly canvasManagerRef={effectiveCanvasRef} initialImageData={savedImageData} />
+
+        <div className="flex gap-3 w-full">
+          <button
+            onClick={onCorrectGuess}
+            className="flex-1 py-3 rounded-xl text-lg font-black text-white bg-green-500 hover:bg-green-600 active:scale-95 transition-all shadow-lg"
+          >
+            Correct!
+          </button>
+          <button
+            onClick={onSkip}
+            className="flex-1 py-3 rounded-xl text-lg font-black text-white bg-gray-400 hover:bg-gray-500 active:scale-95 transition-all shadow-lg"
+          >
+            Skip
+          </button>
+        </div>
       </div>
     );
   }
 
-  // REMOTE MODE
+  // REMOTE MODE — drawer view
   if (isDrawer) {
     return (
       <div className="flex flex-col gap-3 w-full animate-fade-in">
