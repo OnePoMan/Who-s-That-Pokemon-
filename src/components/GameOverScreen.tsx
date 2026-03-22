@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { Player, RoundResult } from '@/lib/game-state';
 import { AvatarIcon } from './AvatarPicker';
 import PokeBallButton from './PokeBallButton';
+import DrawingGallery from './DrawingGallery';
 
 interface GameOverScreenProps {
   winner: Player;
@@ -13,6 +15,8 @@ interface GameOverScreenProps {
 }
 
 export default function GameOverScreen({ winner, players, roundResults, onPlayAgain, onShare }: GameOverScreenProps) {
+  const [showGallery, setShowGallery] = useState(false);
+
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-md mx-auto animate-fade-in">
       {/* Trophy */}
@@ -61,10 +65,19 @@ export default function GameOverScreen({ winner, players, roundResults, onPlayAg
         <PokeBallButton onClick={onShare} variant="blue" size="md" className="flex-1">
           Share
         </PokeBallButton>
+        {roundResults.length > 0 && (
+          <PokeBallButton onClick={() => setShowGallery(true)} variant="blue" size="md" className="flex-1">
+            Gallery
+          </PokeBallButton>
+        )}
         <PokeBallButton onClick={onPlayAgain} variant="red" size="lg" className="flex-1">
           Play Again
         </PokeBallButton>
       </div>
+
+      {showGallery && (
+        <DrawingGallery roundResults={roundResults} onClose={() => setShowGallery(false)} />
+      )}
     </div>
   );
 }
