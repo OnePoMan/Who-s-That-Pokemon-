@@ -57,6 +57,10 @@ export class CanvasManager {
     this.currentTool = tool;
   }
 
+  setOnDrawEvent(cb: ((event: DrawEvent) => void) | undefined) {
+    this.onDrawEvent = cb;
+  }
+
   getColor() { return this.currentColor; }
   getSize() { return this.currentSize; }
   getTool() { return this.currentTool; }
@@ -64,7 +68,6 @@ export class CanvasManager {
   private saveState() {
     this.undoStack.push(this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height));
     this.redoStack = [];
-    // Limit stack size
     if (this.undoStack.length > 50) this.undoStack.shift();
   }
 
@@ -107,7 +110,6 @@ export class CanvasManager {
     this.onDrawEvent?.({ type: 'stroke-end' });
   }
 
-  // Apply a remote draw event
   applyEvent(event: DrawEvent) {
     switch (event.type) {
       case 'stroke-start':
@@ -170,6 +172,14 @@ export class CanvasManager {
     const y = Math.round(pos.y);
     this.floodFill(x, y, this.currentColor);
     this.onDrawEvent?.({ type: 'fill', x, y, color: this.currentColor });
+  }
+
+  getImageData(): ImageData {
+    return this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  putImageData(data: ImageData) {
+    this.ctx.putImageData(data, 0, 0);
   }
 
   private floodFill(startX: number, startY: number, fillColorStr: string) {

@@ -10,7 +10,7 @@ import MemorizePhase from './MemorizePhase';
 import DrawingPhase from './DrawingPhase';
 import RevealPhase from './RevealPhase';
 import GameOverScreen from './GameOverScreen';
-import SoundToggle from './SoundToggle';
+import SettingsPanel from './SettingsPanel';
 import { CanvasManager, DrawEvent } from '@/lib/canvas-utils';
 import { Difficulty, TimerOption, Player, GameMode, ChatMessage } from '@/lib/game-state';
 
@@ -23,6 +23,7 @@ export default function Game() {
   const canvasManagerRef = useRef<CanvasManager | null>(null);
   const screenRef = useRef<ScreenState>('lobby');
   const isHostRef = useRef(false);
+  const bgmStartedRef = useRef(false);
 
   // Track screen state
   const screen = (() => {
@@ -71,7 +72,12 @@ export default function Game() {
     game.setSettings(config.difficulty, config.timerDuration);
     sound.play('whoosh');
 
-    // Start first round
+    // Start BGM on first game start (requires user interaction)
+    if (!bgmStartedRef.current) {
+      bgmStartedRef.current = true;
+      sound.startBgm();
+    }
+
     setTimeout(async () => {
       await game.startRound();
     }, 100);
@@ -88,6 +94,11 @@ export default function Game() {
     game.setPlayers(config.players);
     game.setSettings(config.difficulty, config.timerDuration);
     sound.play('whoosh');
+
+    if (!bgmStartedRef.current) {
+      bgmStartedRef.current = true;
+      sound.startBgm();
+    }
 
     if (config.isHost) {
       setTimeout(async () => {
@@ -110,7 +121,6 @@ export default function Game() {
       timestamp: Date.now(),
     };
 
-    // Check if correct
     const isCorrect = text.toLowerCase().trim() === game.state.currentPokemon?.name.toLowerCase().trim();
     if (isCorrect) {
       msg.isCorrect = true;
@@ -150,12 +160,21 @@ export default function Game() {
 
     saveRoundResult(true);
 
-    // Show reveal after a short delay
     setTimeout(() => {
       sound.play('reveal');
       game.showReveal();
     }, 1500);
   }, [game, sound, peer, saveRoundResult]);
+
+  const handleSkip = useCallback(() => {
+    sound.play('whoosh');
+    saveRoundResult(false);
+
+    setTimeout(() => {
+      sound.play('reveal');
+      game.showReveal();
+    }, 500);
+  }, [game, sound, saveRoundResult]);
 
   const handleTimeUp = useCallback(() => {
     sound.play('wrong');
@@ -202,6 +221,13 @@ export default function Game() {
     game.reset();
   }, [peer, game]);
 
+  const handleGoHome = useCallback(() => {
+    screenRef.current = 'lobby';
+    sound.stopBgm();
+    bgmStartedRef.current = false;
+    game.reset();
+  }, [game, sound]);
+
   // Handle timer tick sound
   useEffect(() => {
     if (game.state.phase === 'DRAWING' && game.state.timeRemaining <= 5 && game.state.timeRemaining > 0) {
@@ -211,7 +237,13 @@ export default function Game() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <SoundToggle onToggle={sound.toggleSound} />
+      <SettingsPanel
+        bgmEnabled={sound.bgmEnabled}
+        sfxEnabled={sound.sfxEnabled}
+        onToggleBgm={sound.toggleBgm}
+        onToggleSfx={sound.toggleSfx}
+        onGoHome={handleGoHome}
+      />
 
       <main className="flex-1 flex flex-col items-center justify-center p-4 max-w-2xl mx-auto w-full">
         {/* LOBBY */}
@@ -258,6 +290,7 @@ export default function Game() {
             isDrawer={game.state.mode === 'remote' ? isHostRef.current === (game.state.currentDrawerIndex === 0) : true}
             onGuess={handleGuess}
             onCorrectGuess={handleCorrectGuess}
+            onSkip={handleSkip}
             onTimeUp={handleTimeUp}
             onDrawEvent={handleDrawEvent}
             canvasManagerRef={canvasManagerRef}

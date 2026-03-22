@@ -15,21 +15,23 @@ interface DrawingCanvasProps {
   onDrawEvent?: (event: DrawEvent) => void;
   readOnly?: boolean;
   canvasManagerRef?: React.MutableRefObject<CanvasManager | null>;
+  initialImageData?: ImageData | null;
 }
 
-export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasManagerRef }: DrawingCanvasProps) {
+export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasManagerRef, initialImageData }: DrawingCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<CanvasManager | null>(null);
   const [currentColor, setCurrentColor] = useState('#000000');
   const [currentSize, setCurrentSize] = useState(4);
   const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | 'fill'>('pen');
+  const currentToolRef = useRef<'pen' | 'eraser' | 'fill'>('pen');
 
+  // Initialize canvas manager once on mount
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Set canvas resolution
     canvas.width = 600;
     canvas.height = 600;
 
@@ -37,10 +39,15 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
     managerRef.current = manager;
     if (canvasManagerRef) canvasManagerRef.current = manager;
 
+    // Restore previous drawing if provided
+    if (initialImageData) {
+      manager.putImageData(initialImageData);
+    }
+
     if (readOnly) return;
 
     const handleMouseDown = (e: MouseEvent) => {
-      if (currentTool === 'fill') {
+      if (currentToolRef.current === 'fill') {
         manager.fill(e);
       } else {
         manager.startStroke(e);
@@ -51,7 +58,7 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
 
     const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault();
-      if (currentTool === 'fill') {
+      if (currentToolRef.current === 'fill') {
         manager.fill(e.touches[0]);
       } else {
         manager.startStroke(e.touches[0]);
@@ -83,11 +90,19 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
       canvas.removeEventListener('touchmove', handleTouchMove);
       canvas.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [onDrawEvent, readOnly, canvasManagerRef, currentTool]);
+    // Only run on mount — tool/color/size changes go through refs and manager methods
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep onDrawEvent callback in sync
+  useEffect(() => {
+    managerRef.current?.setOnDrawEvent(onDrawEvent);
+  }, [onDrawEvent]);
 
   const selectColor = useCallback((color: string) => {
     setCurrentColor(color);
     setCurrentTool('pen');
+    currentToolRef.current = 'pen';
     managerRef.current?.setColor(color);
     managerRef.current?.setTool('pen');
   }, []);
@@ -99,12 +114,12 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
 
   const selectTool = useCallback((tool: 'pen' | 'eraser' | 'fill') => {
     setCurrentTool(tool);
+    currentToolRef.current = tool;
     if (tool === 'eraser') {
       managerRef.current?.setTool('eraser');
     } else if (tool === 'pen') {
       managerRef.current?.setTool('pen');
     }
-    // fill is handled in mouse/touch handlers
   }, []);
 
   const handleUndo = useCallback(() => managerRef.current?.undo(), []);
