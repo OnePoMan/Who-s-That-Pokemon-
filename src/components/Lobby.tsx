@@ -48,64 +48,72 @@ export default function Lobby({ onStart, onRemoteSetup }: LobbyProps) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full max-w-md mx-auto animate-fade-in">
+    <div className="flex flex-col items-center gap-5 w-full max-w-md mx-auto animate-fade-in">
       {/* Logo */}
-      <div className="text-center">
-        <h1 className="text-4xl font-black text-pokemon-red drop-shadow-lg" style={{ textShadow: '2px 2px 0 var(--pokemon-blue)' }}>
+      <div className="text-center py-2">
+        <h1 className="pokemon-title text-xl sm:text-2xl text-pokemon-red leading-relaxed">
           Who&apos;s That
         </h1>
-        <h1 className="text-4xl font-black text-pokemon-yellow" style={{ textShadow: '2px 2px 0 var(--pokemon-dark)' }}>
+        <h1 className="pokemon-title text-xl sm:text-2xl text-pokemon-yellow leading-relaxed">
           Pok&eacute;mon?
         </h1>
-        <p className="text-pokemon-gray mt-2 text-sm">Draw & Guess Edition</p>
+        <p className="text-pokemon-gray mt-1 text-xs font-body font-semibold tracking-wide uppercase">Draw & Guess Edition</p>
       </div>
 
       <div className="pokeball-divider" />
 
       {step === 'mode' && (
         <div className="space-y-4 w-full animate-slide-up">
-          <h2 className="text-xl font-bold text-center text-pokemon-dark">Choose Mode</h2>
+          <h2 className="font-pixel text-xs text-center text-pokemon-dark">Choose Mode</h2>
           <PokeBallButton onClick={() => handleModeSelect('local')} variant="red" size="lg" className="w-full">
             Local Play
           </PokeBallButton>
-          <p className="text-center text-xs text-pokemon-gray -mt-2">Pass the device between players</p>
+          <p className="text-center text-xs text-pokemon-gray font-body -mt-2">Pass the device between players</p>
           <PokeBallButton onClick={() => handleModeSelect('remote')} variant="blue" size="lg" className="w-full">
             Remote Play
           </PokeBallButton>
-          <p className="text-center text-xs text-pokemon-gray -mt-2">Play with a friend via WebRTC</p>
+          <p className="text-center text-xs text-pokemon-gray font-body -mt-2">Play with a friend via WebRTC</p>
         </div>
       )}
 
       {step === 'players' && (
-        <div className="space-y-6 w-full animate-slide-up">
-          <h2 className="text-xl font-bold text-center text-pokemon-dark">Players</h2>
+        <div className="space-y-5 w-full animate-slide-up">
+          <h2 className="font-pixel text-xs text-center text-pokemon-dark">Choose Trainers</h2>
 
           {/* Player 1 */}
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-pokemon-dark">Player 1</label>
-            <input
-              type="text"
-              value={p1Name}
-              onChange={(e) => setP1Name(e.target.value)}
-              placeholder="Enter name..."
-              maxLength={16}
-              className="w-full px-4 py-2 rounded-lg border-2 border-pokemon-dark text-pokemon-dark bg-white outline-none focus:border-pokemon-blue transition-colors"
-            />
-            <AvatarPicker selectedId={p1Avatar} onSelect={setP1Avatar} disabledIds={[p2Avatar]} />
+          <div className="pokemon-card">
+            <div className="pokemon-card-header red">
+              <span className="text-white text-xs font-bold font-body">Player 1</span>
+            </div>
+            <div className="pokemon-card-body space-y-3">
+              <input
+                type="text"
+                value={p1Name}
+                onChange={(e) => setP1Name(e.target.value)}
+                placeholder="Trainer name..."
+                maxLength={16}
+                className="pokemon-input w-full"
+              />
+              <AvatarPicker selectedId={p1Avatar} onSelect={setP1Avatar} disabledIds={[p2Avatar]} />
+            </div>
           </div>
 
           {/* Player 2 */}
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-pokemon-dark">Player 2</label>
-            <input
-              type="text"
-              value={p2Name}
-              onChange={(e) => setP2Name(e.target.value)}
-              placeholder="Enter name..."
-              maxLength={16}
-              className="w-full px-4 py-2 rounded-lg border-2 border-pokemon-dark text-pokemon-dark bg-white outline-none focus:border-pokemon-blue transition-colors"
-            />
-            <AvatarPicker selectedId={p2Avatar} onSelect={setP2Avatar} disabledIds={[p1Avatar]} />
+          <div className="pokemon-card">
+            <div className="pokemon-card-header">
+              <span className="text-white text-xs font-bold font-body">Player 2</span>
+            </div>
+            <div className="pokemon-card-body space-y-3">
+              <input
+                type="text"
+                value={p2Name}
+                onChange={(e) => setP2Name(e.target.value)}
+                placeholder="Trainer name..."
+                maxLength={16}
+                className="pokemon-input w-full"
+              />
+              <AvatarPicker selectedId={p2Avatar} onSelect={setP2Avatar} disabledIds={[p1Avatar]} />
+            </div>
           </div>
 
           <div className="flex gap-3">
@@ -126,51 +134,47 @@ export default function Lobby({ onStart, onRemoteSetup }: LobbyProps) {
       )}
 
       {step === 'settings' && (
-        <div className="space-y-6 w-full animate-slide-up">
-          <h2 className="text-xl font-bold text-center text-pokemon-dark">Settings</h2>
+        <div className="space-y-5 w-full animate-slide-up">
+          <h2 className="font-pixel text-xs text-center text-pokemon-dark">Battle Settings</h2>
 
           {/* Difficulty */}
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-pokemon-dark">Difficulty</label>
-            <div className="flex gap-2">
-              {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setDifficulty(d)}
-                  className={`flex-1 py-2 rounded-full font-bold text-sm capitalize transition-all ${
-                    difficulty === d
-                      ? 'bg-pokemon-blue text-white shadow-lg'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {d}
-                </button>
-              ))}
+          <div className="pokemon-card">
+            <div className="pokemon-card-body space-y-3">
+              <label className="block text-xs font-bold text-pokemon-dark font-body uppercase tracking-wide">Difficulty</label>
+              <div className="flex gap-2">
+                {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDifficulty(d)}
+                    className={`pokemon-toggle flex-1 py-2 text-sm capitalize ${difficulty === d ? 'active' : ''}`}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-pokemon-gray text-center font-body">
+                {difficulty === 'easy' && 'Popular, well-known Pokemon'}
+                {difficulty === 'medium' && 'A wider mix across all generations'}
+                {difficulty === 'hard' && 'All Pokemon + Megas & Regional forms!'}
+              </p>
             </div>
-            <p className="text-xs text-pokemon-gray text-center">
-              {difficulty === 'easy' && 'Popular, well-known Pokemon'}
-              {difficulty === 'medium' && 'A wider mix across all generations'}
-              {difficulty === 'hard' && 'Any Pokemon from all generations!'}
-            </p>
           </div>
 
           {/* Timer */}
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-pokemon-dark">Draw Timer</label>
-            <div className="flex gap-2">
-              {([30, 60, 90] as TimerOption[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTimer(t)}
-                  className={`flex-1 py-2 rounded-full font-bold text-sm transition-all ${
-                    timer === t
-                      ? 'bg-pokemon-blue text-white shadow-lg'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {t}s
-                </button>
-              ))}
+          <div className="pokemon-card">
+            <div className="pokemon-card-body space-y-3">
+              <label className="block text-xs font-bold text-pokemon-dark font-body uppercase tracking-wide">Draw Timer</label>
+              <div className="flex gap-2">
+                {([30, 60, 90] as TimerOption[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTimer(t)}
+                    className={`pokemon-toggle flex-1 py-2 text-sm ${timer === t ? 'active' : ''}`}
+                  >
+                    {t}s
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -179,7 +183,7 @@ export default function Lobby({ onStart, onRemoteSetup }: LobbyProps) {
               Back
             </PokeBallButton>
             <PokeBallButton onClick={handleStart} variant="red" size="lg" className="flex-1">
-              Start!
+              Start Battle!
             </PokeBallButton>
           </div>
         </div>

@@ -236,17 +236,21 @@ export default function Game() {
   }, [game.state.timeRemaining, game.state.phase, sound]);
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <SettingsPanel
-        bgmEnabled={sound.bgmEnabled}
-        sfxEnabled={sound.sfxEnabled}
-        onToggleBgm={sound.toggleBgm}
-        onToggleSfx={sound.toggleSfx}
-        onGoHome={handleGoHome}
-        roundResults={game.state.roundResults}
-      />
+    <div className="flex flex-col flex-1">
+      {/* Pokedex top bar */}
+      <div className="pokedex-topbar">
+        <span className="logo-text">WHO&apos;S THAT POKEMON?</span>
+        <SettingsPanel
+          bgmEnabled={sound.bgmEnabled}
+          sfxEnabled={sound.sfxEnabled}
+          onToggleBgm={sound.toggleBgm}
+          onToggleSfx={sound.toggleSfx}
+          onGoHome={handleGoHome}
+          roundResults={game.state.roundResults}
+        />
+      </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center p-4 max-w-2xl mx-auto w-full">
+      <main className="flex-1 flex flex-col items-center justify-center p-4 w-full">
         {/* LOBBY */}
         {screen === 'lobby' && game.state.phase === 'LOBBY' && (
           <Lobby onStart={handleLocalStart} onRemoteSetup={handleRemoteSetup} />
@@ -323,8 +327,8 @@ export default function Game() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="text-center py-2 text-xs text-pokemon-gray">
+      {/* Footer inside pokedex */}
+      <footer className="text-center py-1.5 text-[10px] font-body text-pokemon-gray border-t border-gray-200">
         Powered by Pok&eacute;API
       </footer>
     </div>

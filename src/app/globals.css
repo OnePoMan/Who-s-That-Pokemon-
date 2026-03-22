@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Fredoka:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -14,8 +15,11 @@
   --pokemon-gray: #A0A0A0;
   --pokemon-dark: #2B2B2B;
   --pokemon-black: #1A1A1A;
-  --background: #F5F5F5;
+  --pokemon-cream: #FFF8E7;
+  --background: #E8E0D0;
   --foreground: #1A1A1A;
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-body: 'Fredoka', system-ui, sans-serif;
 }
 
 @theme inline {
@@ -34,19 +38,200 @@
   --color-pokemon-gray: var(--pokemon-gray);
   --color-pokemon-dark: var(--pokemon-dark);
   --color-pokemon-black: var(--pokemon-black);
+  --color-pokemon-cream: var(--pokemon-cream);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* Pokeball divider */
+/* ============================================
+   POKEBALL BACKGROUND PATTERN
+   ============================================ */
+.pokeball-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Ccircle cx='30' cy='30' r='25' fill='none' stroke='%232B2B2B' stroke-width='2'/%3E%3Cline x1='5' y1='30' x2='55' y2='30' stroke='%232B2B2B' stroke-width='2'/%3E%3Ccircle cx='30' cy='30' r='7' fill='none' stroke='%232B2B2B' stroke-width='2'/%3E%3Ccircle cx='30' cy='30' r='3' fill='%232B2B2B'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 60px 60px;
+}
+
+/* ============================================
+   POKEDEX FRAME
+   ============================================ */
+.pokedex-frame {
+  position: relative;
+  background: linear-gradient(180deg, #DC0A2D 0%, #C00828 50%, #A00020 100%);
+  border-radius: 20px;
+  padding: 6px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.pokedex-frame::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  display: flex;
+  gap: 6px;
+}
+
+.pokedex-screen {
+  background: var(--pokemon-cream);
+  border-radius: 16px;
+  border: 3px solid var(--pokemon-dark);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-height: calc(100vh - 24px);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Pokedex indicator lights */
+.pokedex-lights {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+}
+
+.pokedex-light {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.pokedex-light.blue { background: #4FC3F7; }
+.pokedex-light.red { background: #EF5350; }
+.pokedex-light.green { background: #66BB6A; }
+
+/* Top bar inside the screen */
+.pokedex-topbar {
+  background: linear-gradient(180deg, var(--pokemon-red) 0%, var(--pokemon-red-dark) 100%);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 3px solid var(--pokemon-dark);
+}
+
+.pokedex-topbar .logo-text {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--pokemon-yellow);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+  letter-spacing: -0.5px;
+}
+
+/* ============================================
+   POKEMON TYPOGRAPHY
+   ============================================ */
+.font-pixel {
+  font-family: var(--font-pixel);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.pokemon-title {
+  font-family: var(--font-pixel);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   POKEMON CARD STYLE CONTAINERS
+   ============================================ */
+.pokemon-card {
+  background: white;
+  border: 3px solid var(--pokemon-dark);
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.pokemon-card-header {
+  background: linear-gradient(135deg, var(--pokemon-blue) 0%, var(--pokemon-blue-light) 100%);
+  padding: 8px 16px;
+  border-bottom: 2px solid var(--pokemon-dark);
+}
+
+.pokemon-card-header.red {
+  background: linear-gradient(135deg, var(--pokemon-red) 0%, var(--pokemon-red-light) 100%);
+}
+
+.pokemon-card-body {
+  padding: 16px;
+}
+
+/* ============================================
+   POKEMON-STYLED TOGGLE BUTTONS
+   ============================================ */
+.pokemon-toggle {
+  border: 2px solid var(--pokemon-dark);
+  border-radius: 9999px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pokemon-toggle.active {
+  background: var(--pokemon-blue);
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 76, 202, 0.4);
+  border-color: var(--pokemon-blue);
+}
+
+.pokemon-toggle:not(.active) {
+  background: white;
+  color: var(--pokemon-dark);
+}
+
+.pokemon-toggle:not(.active):hover {
+  background: var(--pokemon-light-gray);
+}
+
+/* ============================================
+   POKEMON-STYLED INPUTS
+   ============================================ */
+.pokemon-input {
+  font-family: var(--font-body);
+  border: 3px solid var(--pokemon-dark);
+  border-radius: 12px;
+  padding: 10px 16px;
+  background: white;
+  color: var(--pokemon-dark);
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.pokemon-input:focus {
+  border-color: var(--pokemon-blue);
+  box-shadow: 0 0 0 3px rgba(59, 76, 202, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.pokemon-input::placeholder {
+  color: var(--pokemon-gray);
+  font-weight: 400;
+}
+
+/* ============================================
+   POKEBALL DIVIDER
+   ============================================ */
 .pokeball-divider {
   position: relative;
   width: 100%;
@@ -66,7 +251,9 @@ body {
   background: white;
 }
 
-/* Silhouette effect */
+/* ============================================
+   SILHOUETTE EFFECT
+   ============================================ */
 .pokemon-silhouette {
   filter: brightness(0);
   transition: filter 0.8s ease-out;
@@ -75,7 +262,9 @@ body {
   filter: brightness(1);
 }
 
-/* Pulse animation for timer warning */
+/* ============================================
+   ANIMATIONS
+   ============================================ */
 @keyframes pulse-red {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
@@ -84,7 +273,6 @@ body {
   animation: pulse-red 0.5s ease-in-out infinite;
 }
 
-/* Slide up animation */
 @keyframes slide-up {
   from { transform: translateY(100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
@@ -93,7 +281,6 @@ body {
   animation: slide-up 0.3s ease-out;
 }
 
-/* Fade in */
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -102,7 +289,6 @@ body {
   animation: fade-in 0.5s ease-out;
 }
 
-/* Bounce in */
 @keyframes bounce-in {
   0% { transform: scale(0); }
   50% { transform: scale(1.15); }
@@ -113,7 +299,6 @@ body {
   animation: bounce-in 0.5s ease-out;
 }
 
-/* Flash for guesser ready */
 @keyframes flash-green {
   0%, 100% { background-color: #22c55e; }
   50% { background-color: #4ade80; }
