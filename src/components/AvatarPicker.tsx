@@ -8,7 +8,7 @@ const SHOWDOWN_SPRITE_BASE = 'https://play.pokemonshowdown.com/sprites/trainers'
 const TRAINERS = [
   { id: 1, name: 'Red', sprite: 'red.png' },
   { id: 2, name: 'Blue', sprite: 'blue.png' },
-  { id: 3, name: 'Leaf', sprite: 'leaf.png' },
+  { id: 3, name: 'Leaf', sprite: 'green.png' },
   { id: 4, name: 'Ethan', sprite: 'ethan.png' },
   { id: 5, name: 'Lyra', sprite: 'lyra.png' },
   { id: 6, name: 'Brendan', sprite: 'brendan.png' },
