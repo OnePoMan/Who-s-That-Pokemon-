@@ -1,3 +1,5 @@
+import { ALL_ALTERNATE_FORM_IDS } from './pokemon-alternate-forms';
+
 // Easy: ~100 most universally recognizable Pokemon
 export const EASY_POKEMON_IDS: number[] = [
   // Gen 1 starters & evolutions
@@ -55,15 +57,16 @@ export const MEDIUM_POKEMON_IDS: number[] = [
   292, 293, 295, 296, 297, 298, 299, 300, 301, 304, 306,
 ];
 
-export function getPokemonPool(difficulty: 'easy' | 'medium' | 'hard'): number[] | null {
+export function getPokemonPool(difficulty: 'easy' | 'medium' | 'hard'): number[] {
   switch (difficulty) {
     case 'easy':
       return EASY_POKEMON_IDS;
     case 'medium':
       return MEDIUM_POKEMON_IDS;
-    case 'hard':
-      // null means "all Pokemon" - we'll fetch the total count from PokeAPI
-      return null;
+    case 'hard': {
+      const baseIds = Array.from({ length: 1025 }, (_, i) => i + 1);
+      return [...baseIds, ...ALL_ALTERNATE_FORM_IDS];
+    }
     default:
       return EASY_POKEMON_IDS;
   }

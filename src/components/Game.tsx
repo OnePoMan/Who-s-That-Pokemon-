@@ -243,6 +243,7 @@ export default function Game() {
         onToggleBgm={sound.toggleBgm}
         onToggleSfx={sound.toggleSfx}
         onGoHome={handleGoHome}
+        roundResults={game.state.roundResults}
       />
 
       <main className="flex-1 flex flex-col items-center justify-center p-4 max-w-2xl mx-auto w-full">
@@ -306,6 +307,7 @@ export default function Game() {
             guesser={game.guesser}
             onNext={handleNextRound}
             nextLabel={game.winner ? 'See Results' : 'Next Round'}
+            drawingDataUrl={game.state.roundResults[game.state.roundResults.length - 1]?.drawingDataUrl || ''}
           />
         )}
 
