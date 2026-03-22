@@ -161,7 +161,7 @@ export default function Game() {
     saveRoundResult(true);
 
     setTimeout(() => {
-      sound.play('reveal');
+      sound.play('whosthat');
       game.showReveal();
     }, 1500);
   }, [game, sound, peer, saveRoundResult]);
@@ -171,7 +171,7 @@ export default function Game() {
     saveRoundResult(false);
 
     setTimeout(() => {
-      sound.play('reveal');
+      sound.play('whosthat');
       game.showReveal();
     }, 500);
   }, [game, sound, saveRoundResult]);
@@ -180,7 +180,7 @@ export default function Game() {
     sound.play('wrong');
     saveRoundResult(false);
     setTimeout(() => {
-      sound.play('reveal');
+      sound.play('whosthat');
       game.showReveal();
     }, 1000);
   }, [game, sound, saveRoundResult]);
