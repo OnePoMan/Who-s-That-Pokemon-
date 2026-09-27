@@ -1,258 +1,218 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import PokeBallButton from './PokeBallButton';
-import AvatarPicker from './AvatarPicker';
-import { Difficulty, TimerOption, Player } from '@/lib/game-state';
+import AvatarPicker, { AvatarIcon } from './AvatarPicker';
+import GameSettingsForm from './GameSettingsForm';
+import { Logo } from './Lobby';
+import { DEFAULT_SETTINGS, type GameSettings, type Player } from '@/lib/game-state';
+import { MAX_NAME_LENGTH, ROOM_CODE_LENGTH, normalizeRoomCode } from '@/lib/net/protocol';
+import type { RoomStatus } from '@/hooks/useRoom';
 
 interface RemoteLobbyProps {
-  onCreateOffer: () => Promise<string>;
-  onAcceptOffer: (offer: string) => Promise<string>;
-  onAcceptAnswer: (answer: string) => Promise<void>;
-  connected: boolean;
-  onStart: (config: {
-    players: [Player, Player];
-    difficulty: Difficulty;
-    timerDuration: TimerOption;
-    isHost: boolean;
-  }) => void;
+  status: RoomStatus;
+  error: string | null;
+  code: string | null;
+  isHost: boolean;
+  /** Everyone in the room so far, host first. */
+  players: Player[];
+  initialCode: string | null;
+  onHost: (name: string, avatarId: number) => void;
+  onJoin: (code: string, name: string, avatarId: number) => void;
+  onStart: (settings: GameSettings) => void;
   onBack: () => void;
 }
 
-export default function RemoteLobby({
-  onCreateOffer,
-  onAcceptOffer,
-  onAcceptAnswer,
-  connected,
-  onStart,
-  onBack,
-}: RemoteLobbyProps) {
-  const [step, setStep] = useState<'role' | 'host-waiting' | 'join' | 'join-waiting' | 'connected' | 'settings'>('role');
-  const [offerCode, setOfferCode] = useState('');
-  const [answerCode, setAnswerCode] = useState('');
-  const [inputCode, setInputCode] = useState('');
-  const [nickname, setNickname] = useState('');
+export default function RemoteLobby({ status, error, code, isHost, players, initialCode, onHost, onJoin, onStart, onBack }: RemoteLobbyProps) {
+  const [name, setName] = useState('');
   const [avatarId, setAvatarId] = useState(1);
-  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
-  const [timer, setTimer] = useState<TimerOption>(60);
-  const [isHost, setIsHost] = useState(false);
-  const [error, setError] = useState('');
-  const [copying, setCopying] = useState(false);
+  const [joinCode, setJoinCode] = useState(initialCode ?? '');
+  const [mode, setMode] = useState<'choose' | 'join'>(initialCode ? 'join' : 'choose');
+  const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
+  const [copied, setCopied] = useState(false);
 
-  const handleHost = useCallback(async () => {
-    setIsHost(true);
-    setError('');
-    try {
-      const offer = await onCreateOffer();
-      setOfferCode(offer);
-      setStep('host-waiting');
-    } catch {
-      setError('Failed to create connection. Please try again.');
+  const inRoom = status !== 'idle' && status !== 'error';
+  const nameOk = name.trim().length > 0;
+  const validCode = normalizeRoomCode(joinCode);
+  const guest = players[1];
+
+  const inviteUrl = code && typeof window !== 'undefined' ? `${window.location.origin}/?room=${code}` : '';
+
+  const shareInvite = async () => {
+    const text = `Play Who's That Pokémon with me! Room code: ${code}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Who's That Pokémon?", text, url: inviteUrl });
+        return;
+      } catch {
+        // Cancelled or unsupported; fall back to copying.
+      }
     }
-  }, [onCreateOffer]);
-
-  const handleJoinSubmit = useCallback(async () => {
-    setError('');
     try {
-      const answer = await onAcceptOffer(inputCode);
-      setAnswerCode(answer);
-      setStep('join-waiting');
+      await navigator.clipboard.writeText(`${text}\n${inviteUrl}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError('Invalid connection code. Please try again.');
+      // Clipboard blocked: the code is on screen to read out.
     }
-  }, [onAcceptOffer, inputCode]);
-
-  const handleHostAcceptAnswer = useCallback(async () => {
-    setError('');
-    try {
-      await onAcceptAnswer(inputCode);
-    } catch {
-      setError('Invalid answer code. Please try again.');
-    }
-  }, [onAcceptAnswer, inputCode]);
-
-  const handleCopy = useCallback(async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopying(true);
-      setTimeout(() => setCopying(false), 2000);
-    } catch {
-      // Fallback: select text
-    }
-  }, []);
-
-  // When connected, move to settings
-  if (connected && step !== 'settings') {
-    setStep('settings');
-  }
-
-  const handleStart = () => {
-    if (!nickname.trim()) return;
-    // In real implementation, exchange player info via WebRTC
-    const localPlayer: Player = {
-      id: isHost ? 'p1' : 'p2',
-      nickname: nickname.trim(),
-      avatarId,
-      score: 0,
-    };
-    const remotePlayer: Player = {
-      id: isHost ? 'p2' : 'p1',
-      nickname: 'Remote Player',
-      avatarId: avatarId === 1 ? 2 : 1,
-      score: 0,
-    };
-    const players: [Player, Player] = isHost
-      ? [localPlayer, remotePlayer]
-      : [remotePlayer, localPlayer];
-    onStart({ players, difficulty, timerDuration: timer, isHost });
   };
 
+  // ---- In a room -------------------------------------------------------------------------------
+
+  if (inRoom && isHost) {
+    return (
+      <div className="flex flex-col items-center gap-4 w-full max-w-md mx-auto animate-fade-in">
+        <h2 className="font-pixel text-xs text-pokemon-dark">Your room</h2>
+        {code ? (
+          <div className="pokemon-card w-full">
+            <div className="pokemon-card-body text-center space-y-3">
+              <p className="text-xs font-body text-gray-600">Tell your friend this code, or send the invite link</p>
+              <p className="font-pixel text-2xl tracking-[0.3em] text-pokemon-blue select-all" aria-label={`Room code ${code.split('').join(' ')}`}>
+                {code}
+              </p>
+              <PokeBallButton onClick={shareInvite} variant="blue" size="sm" className="w-full">
+                {copied ? 'Invite copied!' : 'Share invite'}
+              </PokeBallButton>
+            </div>
+          </div>
+        ) : (
+          <Spinner label="Opening a room…" />
+        )}
+
+        <div className="w-full flex items-center gap-3 justify-center font-body" aria-live="polite">
+          {guest ? (
+            <>
+              <AvatarIcon avatarId={guest.avatarId} size="md" />
+              <span className="font-bold text-pokemon-dark">{guest.nickname} joined!</span>
+            </>
+          ) : status === 'reconnecting' ? (
+            <span className="text-sm text-gray-600">Your friend dropped out. Waiting for them to come back…</span>
+          ) : (
+            <span className="text-sm text-gray-600">Waiting for a friend to join…</span>
+          )}
+        </div>
+
+        <GameSettingsForm settings={settings} onChange={setSettings} />
+
+        <div className="flex gap-3 w-full">
+          <PokeBallButton onClick={onBack} variant="gray" size="md" className="flex-1">
+            Leave
+          </PokeBallButton>
+          <PokeBallButton onClick={() => onStart(settings)} variant="red" size="lg" className="flex-1" disabled={!guest || status !== 'connected'}>
+            Start battle!
+          </PokeBallButton>
+        </div>
+      </div>
+    );
+  }
+
+  if (inRoom) {
+    const host = players[0];
+    return (
+      <div className="flex flex-col items-center gap-5 w-full max-w-md mx-auto animate-fade-in text-center font-body">
+        <h2 className="font-pixel text-xs text-pokemon-dark">Room {code}</h2>
+        {status === 'connecting' && <Spinner label="Connecting…" />}
+        {status === 'reconnecting' && <Spinner label="Connection dropped. Reconnecting…" />}
+        {status === 'connected' &&
+          (host ? (
+            <>
+              <div className="flex items-center gap-3">
+                <AvatarIcon avatarId={host.avatarId} size="lg" />
+                <p className="font-bold text-pokemon-dark">You&apos;re in {host.nickname}&apos;s room</p>
+              </div>
+              <Spinner label={`Waiting for ${host.nickname} to start…`} />
+            </>
+          ) : (
+            <Spinner label="Joining…" />
+          ))}
+        <PokeBallButton onClick={onBack} variant="gray" size="md">
+          Leave
+        </PokeBallButton>
+      </div>
+    );
+  }
+
+  // ---- Setup -------------------------------------------------------------------------------------
+
   return (
-    <div className="flex flex-col items-center gap-6 w-full max-w-md mx-auto animate-fade-in">
-      <h1 className="text-2xl font-black text-pokemon-blue">Remote Play</h1>
+    <div className="flex flex-col items-center gap-5 w-full max-w-md mx-auto animate-fade-in">
+      <Logo />
       <div className="pokeball-divider" />
 
-      {step === 'role' && (
-        <div className="space-y-4 w-full animate-slide-up">
-          <PokeBallButton onClick={handleHost} variant="red" size="lg" className="w-full">
-            Create Room (Host)
+      <div className="pokemon-card w-full">
+        <div className="pokemon-card-header red">
+          <span className="text-white text-xs font-bold font-body">Your trainer</span>
+        </div>
+        <div className="pokemon-card-body space-y-3">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Trainer name…"
+            aria-label="Your name"
+            maxLength={MAX_NAME_LENGTH}
+            autoComplete="off"
+            className="pokemon-input w-full"
+          />
+          <AvatarPicker selectedId={avatarId} onSelect={setAvatarId} />
+        </div>
+      </div>
+
+      {error && (
+        <p role="alert" className="w-full text-sm font-body font-semibold text-pokemon-red-dark bg-red-50 border border-pokemon-red/30 rounded-lg p-3">
+          {error}
+        </p>
+      )}
+
+      {mode === 'choose' ? (
+        <div className="space-y-3 w-full">
+          <PokeBallButton onClick={() => onHost(name.trim(), avatarId)} variant="red" size="lg" className="w-full" disabled={!nameOk}>
+            Create a room
           </PokeBallButton>
-          <PokeBallButton onClick={() => { setIsHost(false); setStep('join'); }} variant="blue" size="lg" className="w-full">
-            Join Room
+          <PokeBallButton onClick={() => setMode('join')} variant="blue" size="lg" className="w-full">
+            Join with a code
           </PokeBallButton>
           <PokeBallButton onClick={onBack} variant="gray" size="md" className="w-full">
             Back
           </PokeBallButton>
         </div>
-      )}
-
-      {step === 'host-waiting' && (
-        <div className="space-y-4 w-full animate-slide-up">
-          <p className="text-sm text-pokemon-dark text-center">Share this code with your friend:</p>
-          <div className="bg-gray-100 rounded-lg p-3 break-all text-xs font-mono text-gray-700 max-h-32 overflow-y-auto">
-            {offerCode}
-          </div>
-          <PokeBallButton onClick={() => handleCopy(offerCode)} variant="blue" size="sm" className="w-full">
-            {copying ? 'Copied!' : 'Copy Code'}
-          </PokeBallButton>
-          <div className="pokeball-divider" />
-          <p className="text-sm text-pokemon-dark text-center">Paste your friend&apos;s answer code:</p>
-          <textarea
-            value={inputCode}
-            onChange={(e) => setInputCode(e.target.value)}
-            placeholder="Paste answer code here..."
-            className="w-full px-3 py-2 rounded-lg border-2 border-pokemon-dark text-xs font-mono h-24 resize-none text-gray-700"
+      ) : (
+        <form
+          className="space-y-3 w-full"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (validCode && nameOk) onJoin(validCode, name.trim(), avatarId);
+          }}
+        >
+          <input
+            type="text"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            placeholder="ROOM CODE"
+            aria-label="Room code"
+            maxLength={ROOM_CODE_LENGTH + 2}
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            className="pokemon-input w-full text-center font-pixel tracking-[0.3em] uppercase"
           />
-          <PokeBallButton onClick={handleHostAcceptAnswer} variant="red" size="md" className="w-full" disabled={!inputCode.trim()}>
-            Connect
+          <PokeBallButton type="submit" variant="red" size="lg" className="w-full" disabled={!validCode || !nameOk}>
+            Join room
           </PokeBallButton>
-        </div>
-      )}
-
-      {step === 'join' && (
-        <div className="space-y-4 w-full animate-slide-up">
-          <p className="text-sm text-pokemon-dark text-center">Paste the host&apos;s connection code:</p>
-          <textarea
-            value={inputCode}
-            onChange={(e) => setInputCode(e.target.value)}
-            placeholder="Paste connection code here..."
-            className="w-full px-3 py-2 rounded-lg border-2 border-pokemon-dark text-xs font-mono h-24 resize-none text-gray-700"
-          />
-          <PokeBallButton onClick={handleJoinSubmit} variant="red" size="md" className="w-full" disabled={!inputCode.trim()}>
-            Generate Answer
-          </PokeBallButton>
-          <PokeBallButton onClick={() => setStep('role')} variant="gray" size="sm" className="w-full">
+          <PokeBallButton onClick={() => setMode('choose')} variant="gray" size="md" className="w-full">
             Back
           </PokeBallButton>
-        </div>
+        </form>
       )}
+    </div>
+  );
+}
 
-      {step === 'join-waiting' && (
-        <div className="space-y-4 w-full animate-slide-up">
-          <p className="text-sm text-pokemon-dark text-center">Send this answer code back to the host:</p>
-          <div className="bg-gray-100 rounded-lg p-3 break-all text-xs font-mono text-gray-700 max-h-32 overflow-y-auto">
-            {answerCode}
-          </div>
-          <PokeBallButton onClick={() => handleCopy(answerCode)} variant="blue" size="sm" className="w-full">
-            {copying ? 'Copied!' : 'Copy Answer Code'}
-          </PokeBallButton>
-          <p className="text-sm text-pokemon-gray text-center">Waiting for host to connect...</p>
-          <div className="flex justify-center">
-            <div className="w-8 h-8 border-4 border-pokemon-red border-t-transparent rounded-full animate-spin" />
-          </div>
-        </div>
-      )}
-
-      {step === 'settings' && (
-        <div className="space-y-4 w-full animate-slide-up">
-          <div className="bg-green-50 border border-green-300 rounded-lg p-3 text-center">
-            <p className="text-green-700 font-bold">Connected!</p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-pokemon-dark">Your Name</label>
-            <input
-              type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="Enter your name..."
-              maxLength={16}
-              className="w-full px-4 py-2 rounded-lg border-2 border-pokemon-dark text-pokemon-dark bg-white outline-none focus:border-pokemon-blue"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-bold text-pokemon-dark">Your Avatar</label>
-            <AvatarPicker selectedId={avatarId} onSelect={setAvatarId} />
-          </div>
-
-          {isHost && (
-            <>
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-pokemon-dark">Difficulty</label>
-                <div className="flex gap-2">
-                  {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setDifficulty(d)}
-                      className={`flex-1 py-2 rounded-full font-bold text-sm capitalize transition-all ${
-                        difficulty === d ? 'bg-pokemon-blue text-white' : 'bg-gray-200 text-gray-700'
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-pokemon-dark">Timer</label>
-                <div className="flex gap-2">
-                  {([30, 60, 90] as TimerOption[]).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setTimer(t)}
-                      className={`flex-1 py-2 rounded-full font-bold text-sm transition-all ${
-                        timer === t ? 'bg-pokemon-blue text-white' : 'bg-gray-200 text-gray-700'
-                      }`}
-                    >
-                      {t}s
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          <PokeBallButton onClick={handleStart} variant="red" size="lg" className="w-full" disabled={!nickname.trim()}>
-            {isHost ? 'Start Game!' : 'Ready!'}
-          </PokeBallButton>
-        </div>
-      )}
-
-      {error && (
-        <p className="text-sm text-pokemon-red font-bold">{error}</p>
-      )}
+function Spinner({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2" role="status">
+      <div className="w-8 h-8 border-4 border-pokemon-red border-t-transparent rounded-full animate-spin" aria-hidden />
+      <span className="text-sm text-gray-600 font-body">{label}</span>
     </div>
   );
 }

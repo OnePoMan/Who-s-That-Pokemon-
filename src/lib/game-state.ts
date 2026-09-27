@@ -1,13 +1,16 @@
-export type GamePhase =
-  | 'LOBBY'
-  | 'MEMORIZE'
-  | 'DRAWING'
-  | 'REVEAL'
-  | 'GAME_OVER';
+export type GamePhase = 'LOBBY' | 'MEMORIZE' | 'DRAWING' | 'REVEAL' | 'GAME_OVER';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type TimerOption = 30 | 60 | 90;
+export type MemorizeOption = 5 | 10 | 15;
+export type WinScoreOption = 3 | 5 | 7;
 export type GameMode = 'local' | 'remote';
+export type RoundOutcome = 'correct' | 'skipped' | 'timeout';
+
+export const TIMER_OPTIONS: readonly TimerOption[] = [30, 60, 90];
+export const MEMORIZE_OPTIONS: readonly MemorizeOption[] = [5, 10, 15];
+export const WIN_SCORE_OPTIONS: readonly WinScoreOption[] = [3, 5, 7];
+export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
 
 export interface Player {
   id: string;
@@ -19,39 +22,59 @@ export interface Player {
 export interface PokemonData {
   id: number;
   name: string;
-  spriteUrl: string;
   artworkUrl: string;
 }
 
+export interface GameSettings {
+  difficulty: Difficulty;
+  timerDuration: TimerOption;
+  memorizeSeconds: MemorizeOption;
+  winScore: WinScoreOption;
+  /** When false the drawer only sees the name while memorizing. */
+  showArtwork: boolean;
+}
+
+export const DEFAULT_SETTINGS: GameSettings = {
+  difficulty: 'easy',
+  timerDuration: 60,
+  memorizeSeconds: 10,
+  winScore: 3,
+  showArtwork: true,
+};
+
 export interface RoundResult {
+  round: number;
   pokemon: PokemonData;
-  drawingDataUrl: string;
-  guessedCorrectly: boolean;
-  drawer: Player;
-  guesser: Player;
-  timeRemaining: number;
+  outcome: RoundOutcome;
+  drawerId: string;
+  guesserId: string;
 }
 
 export interface ChatMessage {
   id: string;
+  senderId: string;
   sender: string;
   text: string;
-  timestamp: number;
   isCorrect?: boolean;
 }
 
 export interface GameState {
   mode: GameMode;
   phase: GamePhase;
-  players: [Player, Player] | [];
+  players: Player[];
   currentDrawerIndex: number;
+  round: number;
   currentPokemon: PokemonData | null;
-  difficulty: Difficulty;
-  timerDuration: TimerOption;
-  timeRemaining: number;
+  settings: GameSettings;
+  /**
+   * Local clock time (ms) when the memorize countdown or drawing timer ends. Null while the
+   * device is being handed over, so the handoff screen never eats into anyone's time.
+   */
+  phaseEndsAt: number | null;
+  outcome: RoundOutcome | null;
   roundResults: RoundResult[];
   chatMessages: ChatMessage[];
-  winScore: number;
+  usedPokemonIds: number[];
 }
 
 export const initialGameState: GameState = {
@@ -59,126 +82,139 @@ export const initialGameState: GameState = {
   phase: 'LOBBY',
   players: [],
   currentDrawerIndex: 0,
+  round: 0,
   currentPokemon: null,
-  difficulty: 'easy',
-  timerDuration: 60,
-  timeRemaining: 60,
+  settings: DEFAULT_SETTINGS,
+  phaseEndsAt: null,
+  outcome: null,
   roundResults: [],
   chatMessages: [],
-  winScore: 3,
+  usedPokemonIds: [],
 };
 
 export type GameAction =
-  | { type: 'SET_MODE'; mode: GameMode }
-  | { type: 'SET_PLAYERS'; players: [Player, Player] }
-  | { type: 'SET_SETTINGS'; difficulty: Difficulty; timerDuration: TimerOption }
-  | { type: 'START_MEMORIZE'; pokemon: PokemonData }
-  | { type: 'START_DRAWING' }
-  | { type: 'TICK' }
-  | { type: 'CORRECT_GUESS' }
-  | { type: 'TIME_UP' }
-  | { type: 'ADD_ROUND_RESULT'; result: RoundResult }
-  | { type: 'SHOW_REVEAL' }
-  | { type: 'NEXT_ROUND'; pokemon: PokemonData }
-  | { type: 'GAME_OVER' }
+  | { type: 'START_GAME'; mode: GameMode; players: Player[]; settings: GameSettings; pokemon: PokemonData }
+  | { type: 'BEGIN_MEMORIZE'; now: number }
+  | { type: 'START_DRAWING'; now: number }
   | { type: 'ADD_CHAT_MESSAGE'; message: ChatMessage }
+  | { type: 'END_ROUND'; outcome: RoundOutcome }
+  | { type: 'NEXT_ROUND'; pokemon: PokemonData }
+  | { type: 'REMATCH'; pokemon: PokemonData }
+  | { type: 'REPLACE'; state: GameState }
   | { type: 'RESET' };
 
+function startRound(state: GameState, pokemon: PokemonData, drawerIndex: number): GameState {
+  return {
+    ...state,
+    phase: 'MEMORIZE',
+    round: state.round + 1,
+    currentDrawerIndex: drawerIndex,
+    currentPokemon: pokemon,
+    phaseEndsAt: null,
+    outcome: null,
+    chatMessages: [],
+    usedPokemonIds: [...state.usedPokemonIds, pokemon.id],
+  };
+}
+
+// Every transition checks the phase it starts from. That makes repeated taps, late timer ticks
+// and duplicated network messages harmless: only the first one changes anything.
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
-    case 'SET_MODE':
-      return { ...state, mode: action.mode };
+    case 'START_GAME':
+      return startRound(
+        {
+          ...initialGameState,
+          mode: action.mode,
+          players: action.players.map((p) => ({ ...p, score: 0 })),
+          settings: action.settings,
+        },
+        action.pokemon,
+        0,
+      );
 
-    case 'SET_PLAYERS':
-      return { ...state, players: action.players };
-
-    case 'SET_SETTINGS':
-      return {
-        ...state,
-        difficulty: action.difficulty,
-        timerDuration: action.timerDuration,
-        timeRemaining: action.timerDuration,
-      };
-
-    case 'START_MEMORIZE':
-      return {
-        ...state,
-        phase: 'MEMORIZE',
-        currentPokemon: action.pokemon,
-        timeRemaining: state.timerDuration,
-        chatMessages: [],
-      };
+    case 'BEGIN_MEMORIZE':
+      if (state.phase !== 'MEMORIZE' || state.phaseEndsAt !== null) return state;
+      return { ...state, phaseEndsAt: action.now + state.settings.memorizeSeconds * 1000 };
 
     case 'START_DRAWING':
-      return { ...state, phase: 'DRAWING' };
-
-    case 'TICK':
-      return {
-        ...state,
-        timeRemaining: Math.max(0, state.timeRemaining - 1),
-      };
-
-    case 'CORRECT_GUESS': {
-      if (state.players.length < 2) return state;
-      const guesserIndex = state.currentDrawerIndex === 0 ? 1 : 0;
-      const newPlayers = [...state.players] as [Player, Player];
-      newPlayers[guesserIndex] = {
-        ...newPlayers[guesserIndex],
-        score: newPlayers[guesserIndex].score + 1,
-      };
-      return { ...state, players: newPlayers };
-    }
-
-    case 'SHOW_REVEAL':
-      return { ...state, phase: 'REVEAL' };
-
-    case 'ADD_ROUND_RESULT':
-      return {
-        ...state,
-        roundResults: [...state.roundResults, action.result],
-      };
-
-    case 'NEXT_ROUND':
-      return {
-        ...state,
-        phase: 'MEMORIZE',
-        currentDrawerIndex: state.currentDrawerIndex === 0 ? 1 : 0,
-        currentPokemon: action.pokemon,
-        timeRemaining: state.timerDuration,
-        chatMessages: [],
-      };
-
-    case 'GAME_OVER':
-      return { ...state, phase: 'GAME_OVER' };
+      if (state.phase !== 'MEMORIZE') return state;
+      return { ...state, phase: 'DRAWING', phaseEndsAt: action.now + state.settings.timerDuration * 1000 };
 
     case 'ADD_CHAT_MESSAGE':
+      if (state.phase !== 'DRAWING') return state;
+      return { ...state, chatMessages: [...state.chatMessages, action.message].slice(-50) };
+
+    case 'END_ROUND': {
+      if (state.phase !== 'DRAWING' || !state.currentPokemon) return state;
+      const drawer = state.players[state.currentDrawerIndex];
+      const guesser = state.players[guesserIndex(state)];
+      const players =
+        action.outcome === 'correct'
+          ? state.players.map((p) => (p.id === guesser.id ? { ...p, score: p.score + 1 } : p))
+          : state.players;
       return {
         ...state,
-        chatMessages: [...state.chatMessages, action.message],
+        phase: 'REVEAL',
+        phaseEndsAt: null,
+        outcome: action.outcome,
+        players,
+        roundResults: [
+          ...state.roundResults,
+          {
+            round: state.round,
+            pokemon: state.currentPokemon,
+            outcome: action.outcome,
+            drawerId: drawer.id,
+            guesserId: guesser.id,
+          },
+        ],
       };
+    }
+
+    case 'NEXT_ROUND':
+      if (state.phase !== 'REVEAL') return state;
+      if (getWinner(state)) return { ...state, phase: 'GAME_OVER' };
+      // Roles alternate every round, whatever the outcome.
+      return startRound(state, action.pokemon, guesserIndex(state));
+
+    case 'REMATCH':
+      if (state.phase !== 'GAME_OVER') return state;
+      return startRound(
+        {
+          ...state,
+          round: 0,
+          players: state.players.map((p) => ({ ...p, score: 0 })),
+          roundResults: [],
+          usedPokemonIds: [],
+        },
+        action.pokemon,
+        0,
+      );
+
+    case 'REPLACE':
+      return action.state;
 
     case 'RESET':
-      return { ...initialGameState };
+      return initialGameState;
 
     default:
       return state;
   }
 }
 
+export function guesserIndex(state: GameState): number {
+  return state.currentDrawerIndex === 0 ? 1 : 0;
+}
+
 export function getDrawer(state: GameState): Player | null {
-  if (state.players.length < 2) return null;
   return state.players[state.currentDrawerIndex] ?? null;
 }
 
 export function getGuesser(state: GameState): Player | null {
-  if (state.players.length < 2) return null;
-  return state.players[state.currentDrawerIndex === 0 ? 1 : 0] ?? null;
+  return state.players[guesserIndex(state)] ?? null;
 }
 
-export function checkWinCondition(state: GameState): Player | null {
-  if (state.players.length < 2) return null;
-  for (const player of state.players) {
-    if (player.score >= state.winScore) return player;
-  }
-  return null;
+export function getWinner(state: GameState): Player | null {
+  return state.players.find((p) => p.score >= state.settings.winScore) ?? null;
 }

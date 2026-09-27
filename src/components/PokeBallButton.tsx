@@ -1,7 +1,8 @@
 'use client';
 
 interface PokeBallButtonProps {
-  onClick: () => void;
+  onClick?: () => void;
+  type?: 'button' | 'submit';
   children: React.ReactNode;
   variant?: 'red' | 'blue' | 'gray';
   size?: 'sm' | 'md' | 'lg';
@@ -28,9 +29,11 @@ export default function PokeBallButton({
   size = 'md',
   disabled = false,
   className = '',
+  type = 'button',
 }: PokeBallButtonProps) {
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       className={`

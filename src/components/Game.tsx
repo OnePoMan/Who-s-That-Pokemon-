@@ -1,336 +1,549 @@
 'use client';
 
-import { useCallback, useRef, useEffect } from 'react';
-import { useGameState } from '@/hooks/useGameState';
-import { useSound } from '@/hooks/useSound';
-import { usePeerConnection } from '@/hooks/usePeerConnection';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import Lobby from './Lobby';
 import RemoteLobby from './RemoteLobby';
 import MemorizePhase from './MemorizePhase';
 import DrawingPhase from './DrawingPhase';
-import RevealPhase from './RevealPhase';
+import RevealPhase, { type SavedDrawing } from './RevealPhase';
 import GameOverScreen from './GameOverScreen';
 import SettingsPanel from './SettingsPanel';
-import { CanvasManager, DrawEvent } from '@/lib/canvas-utils';
-import { Difficulty, TimerOption, Player, GameMode, ChatMessage } from '@/lib/game-state';
+import DrawingGallery from './DrawingGallery';
+import ConfirmDialog from './ConfirmDialog';
+import PokeBallButton from './PokeBallButton';
+import { usePrefs } from '@/hooks/usePrefs';
+import { useSound } from '@/hooks/useSound';
+import { useRoom } from '@/hooks/useRoom';
+import { useNow, useWakeLock } from '@/hooks/useDeviceHelpers';
+import { vibrate } from '@/lib/prefs';
+import { isCorrectGuess, pickRandomPokemon } from '@/lib/pokedex';
+import { composeComparison, safeFilename, shareOrDownload } from '@/lib/share';
+import { fromWire, normalizeRoomCode, toWire, type Intent, type Message } from '@/lib/net/protocol';
+import type { CanvasManager, DrawEvent } from '@/lib/canvas-engine';
+import {
+  gameReducer,
+  getDrawer,
+  getGuesser,
+  getWinner,
+  initialGameState,
+  type GameSettings,
+  type GameState,
+  type Player,
+  type RoundOutcome,
+} from '@/lib/game-state';
 
-type ScreenState = 'lobby' | 'remote-lobby' | 'game';
+const HOST_ID = 'p1';
+const GUEST_ID = 'p2';
+
+// Faster than anyone types, slow enough that a modified client can't try every name.
+const GUESS_COOLDOWN_MS = 1200;
+
+const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 export default function Game() {
-  const game = useGameState();
-  const sound = useSound();
-  const peer = usePeerConnection();
-  const canvasManagerRef = useRef<CanvasManager | null>(null);
-  const screenRef = useRef<ScreenState>('lobby');
-  const isHostRef = useRef(false);
-  const bgmStartedRef = useRef(false);
+  const [state, dispatch] = useReducer(gameReducer, initialGameState);
+  const [prefs, updatePrefs] = usePrefs();
+  const sound = useSound(prefs);
+  const [screen, setScreen] = useState<'lobby' | 'remote'>('lobby');
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [lobbyPlayers, setLobbyPlayers] = useState<Player[]>([]);
+  const [myId, setMyId] = useState(HOST_ID);
+  const [drawings, setDrawings] = useState<Record<number, SavedDrawing>>({});
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [confirmHome, setConfirmHome] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // Track screen state
-  const screen = (() => {
-    if (game.state.phase === 'LOBBY') {
-      return screenRef.current;
-    }
-    return 'game';
-  })();
+  const canvasRef = useRef<CanvasManager | null>(null);
+  // Strokes received from the other phone this round, replayed if the canvas mounts late.
+  const remoteStrokesRef = useRef<DrawEvent[]>([]);
+  const stateRef = useRef<GameState>(state);
+  const sentCanvasRef = useRef(false);
+  const lastGuessAtRef = useRef<Record<string, number>>({});
+  // Read by the message handler, which is created before the room hook it is passed to.
+  const roomRef = useRef<{ isHost: boolean; send: (msg: Message) => void } | null>(null);
+  const myIdRef = useRef(HOST_ID);
+  const lobbyRef = useRef<Player[]>([]);
 
-  // Set up peer message handlers for remote mode
   useEffect(() => {
-    peer.onMessage('draw-event', (payload) => {
-      canvasManagerRef.current?.applyEvent(payload as DrawEvent);
-    });
+    stateRef.current = state;
+  }, [state]);
 
-    peer.onMessage('chat', (payload) => {
-      const msg = payload as ChatMessage;
-      game.addChatMessage(msg);
-    });
+  const ticking = state.phase === 'MEMORIZE' || state.phase === 'DRAWING';
+  const now = useNow(ticking);
+  useWakeLock(state.phase !== 'LOBBY' && state.phase !== 'GAME_OVER');
 
-    peer.onMessage('game-action', (payload) => {
-      const action = payload as { action: string; data?: unknown };
-      switch (action.action) {
-        case 'correct-guess':
-          game.handleCorrectGuess();
-          sound.play('correct');
-          break;
-      }
-    });
+  // An invite link (?room=CODE) opens the join screen with the code filled in.
+  useEffect(() => {
+    const code = normalizeRoomCode(new URLSearchParams(window.location.search).get('room') ?? '');
+    if (!code) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setInviteCode(code);
+    setScreen('remote');
+    window.history.replaceState(null, '', window.location.pathname);
   }, []);
 
-  const handleRemoteSetup = useCallback(() => {
-    screenRef.current = 'remote-lobby';
-    game.setMode('remote');
-  }, [game]);
+  // ---- Helpers shared by local play and the remote host ---------------------------------------
 
-  const handleLocalStart = useCallback(async (config: {
-    mode: GameMode;
-    players: [Player, Player];
-    difficulty: Difficulty;
-    timerDuration: TimerOption;
-  }) => {
-    screenRef.current = 'game';
-    game.setMode(config.mode);
-    game.setPlayers(config.players);
-    game.setSettings(config.difficulty, config.timerDuration);
-    sound.play('whoosh');
+  const captureDrawing = useCallback((round: number) => {
+    const manager = canvasRef.current;
+    if (!manager) return;
+    const saved: SavedDrawing = { dataUrl: manager.toDataURL(), timeline: manager.getTimeline() };
+    setDrawings((prev) => ({ ...prev, [round]: saved }));
+  }, []);
 
-    // Start BGM on first game start (requires user interaction)
-    if (!bgmStartedRef.current) {
-      bgmStartedRef.current = true;
-      sound.startBgm();
-    }
+  const endRound = useCallback(
+    (outcome: RoundOutcome) => {
+      const s = stateRef.current;
+      if (s.phase !== 'DRAWING') return;
+      captureDrawing(s.round);
+      dispatch({ type: 'END_ROUND', outcome });
+    },
+    [captureDrawing],
+  );
 
-    setTimeout(async () => {
-      await game.startRound();
-    }, 100);
-  }, [game, sound]);
+  // Remote rounds skip the pass-the-phone handoff, so their memorize countdown starts at once.
+  const beginRoundTimers = useCallback((mode: GameState['mode']) => {
+    if (mode === 'remote') dispatch({ type: 'BEGIN_MEMORIZE', now: Date.now() });
+  }, []);
 
-  const handleRemoteStart = useCallback(async (config: {
-    players: [Player, Player];
-    difficulty: Difficulty;
-    timerDuration: TimerOption;
-    isHost: boolean;
-  }) => {
-    screenRef.current = 'game';
-    isHostRef.current = config.isHost;
-    game.setPlayers(config.players);
-    game.setSettings(config.difficulty, config.timerDuration);
-    sound.play('whoosh');
-
-    if (!bgmStartedRef.current) {
-      bgmStartedRef.current = true;
-      sound.startBgm();
-    }
-
-    if (config.isHost) {
-      setTimeout(async () => {
-        await game.startRound();
-      }, 100);
-    }
-  }, [game, sound]);
-
-  const handleDrawEvent = useCallback((event: DrawEvent) => {
-    if (game.state.mode === 'remote') {
-      peer.sendDrawEvent(event);
-    }
-  }, [game.state.mode, peer]);
-
-  const handleGuess = useCallback((text: string) => {
-    const msg: ChatMessage = {
-      id: Date.now().toString(),
-      sender: game.guesser?.nickname || 'Player',
-      text,
-      timestamp: Date.now(),
-    };
-
-    const isCorrect = text.toLowerCase().trim() === game.state.currentPokemon?.name.toLowerCase().trim();
-    if (isCorrect) {
-      msg.isCorrect = true;
-    }
-
-    game.addChatMessage(msg);
-
-    if (game.state.mode === 'remote') {
-      peer.send('chat', msg);
-    }
-
-    if (isCorrect) {
-      sound.play('correct');
-    }
-  }, [game, peer, sound]);
-
-  const saveRoundResult = useCallback((guessedCorrectly: boolean) => {
-    if (!game.state.currentPokemon || !game.drawer || !game.guesser) return;
-    const drawingDataUrl = canvasManagerRef.current?.toDataURL() || '';
-    game.addRoundResult({
-      pokemon: game.state.currentPokemon,
-      drawingDataUrl,
-      guessedCorrectly,
-      drawer: game.drawer,
-      guesser: game.guesser,
-      timeRemaining: game.state.timeRemaining,
-    });
-  }, [game]);
-
-  const handleCorrectGuess = useCallback(() => {
-    game.handleCorrectGuess();
-    sound.play('correct');
-
-    if (game.state.mode === 'remote') {
-      peer.send('game-action', { action: 'correct-guess' });
-    }
-
-    saveRoundResult(true);
-
-    setTimeout(() => {
-      sound.play('whosthat');
-      game.showReveal();
-    }, 1500);
-  }, [game, sound, peer, saveRoundResult]);
-
-  const handleSkip = useCallback(() => {
-    sound.play('whoosh');
-    saveRoundResult(false);
-
-    setTimeout(() => {
-      sound.play('whosthat');
-      game.showReveal();
-    }, 500);
-  }, [game, sound, saveRoundResult]);
-
-  const handleTimeUp = useCallback(() => {
-    sound.play('wrong');
-    saveRoundResult(false);
-    setTimeout(() => {
-      sound.play('whosthat');
-      game.showReveal();
-    }, 1000);
-  }, [game, sound, saveRoundResult]);
-
-  const handleNextRound = useCallback(async () => {
-    const winner = game.winner;
-    if (winner) {
-      sound.play('gameOver');
-      game.gameOver();
-      return;
-    }
-    sound.play('whoosh');
-    await game.nextRound();
-  }, [game, sound]);
-
-  const handlePlayAgain = useCallback(() => {
-    screenRef.current = 'lobby';
-    game.reset();
-    sound.play('click');
-  }, [game, sound]);
-
-  const handleShare = useCallback(async () => {
-    const text = `I played Who's That Pokemon - Draw & Guess Edition! 🎨\n${game.state.players[0]?.nickname}: ${game.state.players[0]?.score} | ${game.state.players[1]?.nickname}: ${game.state.players[1]?.score}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Who's That Pokemon?", text });
-      } catch {
-        // User cancelled
+  /** Applies an intent with the authority of the host (or the single local device). */
+  const performIntent = useCallback(
+    (intent: Intent, byId: string) => {
+      const s = stateRef.current;
+      const drawer = getDrawer(s);
+      const drawerOnly = s.mode === 'remote' && drawer?.id !== byId;
+      switch (intent) {
+        case 'begin-drawing':
+          if (!drawerOnly) dispatch({ type: 'START_DRAWING', now: Date.now() });
+          break;
+        case 'correct':
+          if (!drawerOnly) endRound('correct');
+          break;
+        case 'skip':
+          if (!drawerOnly) endRound('skipped');
+          break;
+        case 'next-round':
+          if (s.phase !== 'REVEAL') break;
+          dispatch({ type: 'NEXT_ROUND', pokemon: pickRandomPokemon(s.settings.difficulty, s.usedPokemonIds) });
+          beginRoundTimers(s.mode);
+          break;
+        case 'rematch':
+          if (s.phase !== 'GAME_OVER') break;
+          setDrawings({});
+          dispatch({ type: 'REMATCH', pokemon: pickRandomPokemon(s.settings.difficulty) });
+          beginRoundTimers(s.mode);
+          break;
       }
-    } else {
-      await navigator.clipboard.writeText(text);
-    }
-  }, [game.state.players]);
+    },
+    [beginRoundTimers, endRound],
+  );
 
-  const handleBackFromRemote = useCallback(() => {
-    screenRef.current = 'lobby';
-    peer.cleanup();
-    game.reset();
-  }, [peer, game]);
+  const performGuess = useCallback(
+    (text: string, byId: string) => {
+      const s = stateRef.current;
+      const guesser = getGuesser(s);
+      if (s.phase !== 'DRAWING' || !guesser || guesser.id !== byId || !s.currentPokemon) return;
+      const nowMs = Date.now();
+      if (nowMs - (lastGuessAtRef.current[byId] ?? 0) < GUESS_COOLDOWN_MS) return;
+      lastGuessAtRef.current[byId] = nowMs;
+      const correct = isCorrectGuess(text, s.currentPokemon.name);
+      dispatch({
+        type: 'ADD_CHAT_MESSAGE',
+        message: { id: newId(), senderId: byId, sender: guesser.nickname, text, isCorrect: correct },
+      });
+      if (correct) endRound('correct');
+    },
+    [endRound],
+  );
 
-  const handleGoHome = useCallback(() => {
-    screenRef.current = 'lobby';
-    sound.stopBgm();
-    bgmStartedRef.current = false;
-    game.reset();
-  }, [game, sound]);
+  // ---- Remote play -------------------------------------------------------------------------------
 
-  // Handle timer tick sound
+  const handleMessage = useCallback(
+    (msg: Message) => {
+      const s = stateRef.current;
+      const hosting = roomRef.current?.isHost ?? false;
+      const iAmDrawer = getDrawer(s)?.id === myIdRef.current;
+
+      switch (msg.t) {
+        case 'hello': {
+          if (!hosting) return;
+          const host = lobbyRef.current[0];
+          const guest: Player = { id: GUEST_ID, nickname: msg.name, avatarId: msg.avatarId, score: 0 };
+          const players = [host, guest];
+          setLobbyPlayers(players);
+          roomRef.current?.send({ t: 'lobby', players, youId: GUEST_ID });
+          if (s.phase !== 'LOBBY') {
+            // A returning guest: bring them back up to date, including the drawing so far.
+            roomRef.current?.send({ t: 'state', state: toWire(s, GUEST_ID, Date.now()) });
+            if (s.phase === 'DRAWING' && iAmDrawer && canvasRef.current) {
+              roomRef.current?.send({ t: 'canvas', round: s.round, events: canvasRef.current.getTimeline() });
+            }
+          }
+          return;
+        }
+        case 'lobby':
+          if (hosting) return;
+          setLobbyPlayers(msg.players);
+          setMyId(msg.youId);
+          myIdRef.current = msg.youId;
+          return;
+        case 'state': {
+          if (hosting) return;
+          const next = fromWire(msg.state, Date.now());
+          if (s.phase === 'DRAWING' && (next.phase !== 'DRAWING' || next.round !== s.round)) captureDrawing(s.round);
+          if (next.round !== s.round) {
+            remoteStrokesRef.current = [];
+            sentCanvasRef.current = false;
+          }
+          if (next.phase === 'MEMORIZE' && next.round === 1 && s.round !== 1) setDrawings({});
+          dispatch({ type: 'REPLACE', state: next });
+          // Back from a dropped connection mid-drawing: resend my strokes to the host.
+          const drawerNow = next.players[next.currentDrawerIndex]?.id === myIdRef.current;
+          if (next.phase === 'DRAWING' && drawerNow && !sentCanvasRef.current && canvasRef.current) {
+            sentCanvasRef.current = true;
+            roomRef.current?.send({ t: 'canvas', round: next.round, events: canvasRef.current.getTimeline() });
+          }
+          return;
+        }
+        case 'intent':
+          if (hosting) performIntent(msg.intent, GUEST_ID);
+          return;
+        case 'guess':
+          if (hosting) performGuess(msg.text, GUEST_ID);
+          return;
+        case 'draw':
+          if (s.phase !== 'DRAWING' || iAmDrawer) return;
+          remoteStrokesRef.current.push(msg.e);
+          canvasRef.current?.applyEvent(msg.e);
+          return;
+        case 'canvas':
+          if (s.phase !== 'DRAWING' || iAmDrawer || msg.round !== s.round) return;
+          remoteStrokesRef.current = msg.events;
+          canvasRef.current?.loadTimeline(msg.events);
+          return;
+        case 'reject':
+          return; // handled inside useRoom
+      }
+    },
+    [captureDrawing, performGuess, performIntent],
+  );
+
+  const room = useRoom(handleMessage);
   useEffect(() => {
-    if (game.state.phase === 'DRAWING' && game.state.timeRemaining <= 5 && game.state.timeRemaining > 0) {
+    roomRef.current = room;
+    lobbyRef.current = lobbyPlayers;
+  });
+
+  const roomSend = room.send;
+  const isRemote = state.mode === 'remote' && state.phase !== 'LOBBY';
+  const authority = !isRemote || room.isHost;
+
+  // The host keeps the guest in sync after every change.
+  useEffect(() => {
+    if (!isRemote || !room.isHost || room.status !== 'connected') return;
+    roomSend({ t: 'state', state: toWire(state, GUEST_ID, Date.now()) });
+  }, [state, isRemote, room.isHost, room.status, roomSend]);
+
+  // A new drawing round starts with a clean slate of received strokes.
+  useEffect(() => {
+    remoteStrokesRef.current = [];
+  }, [state.round]);
+
+  /** Every button goes through here: applied directly, or sent to the host. */
+  const act = useCallback(
+    (intent: Intent) => {
+      if (authority) performIntent(intent, myIdRef.current);
+      else roomSend({ t: 'intent', intent });
+    },
+    [authority, performIntent, roomSend],
+  );
+
+  const guess = useCallback(
+    (text: string) => {
+      if (authority) performGuess(text, myIdRef.current);
+      else roomSend({ t: 'guess', text });
+    },
+    [authority, performGuess, roomSend],
+  );
+
+  const onDrawEvent = useCallback(
+    (e: DrawEvent) => {
+      if (isRemote) roomSend({ t: 'draw', e });
+    },
+    [isRemote, roomSend],
+  );
+
+  // ---- Timers (authority only) -------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!authority || state.phaseEndsAt === null || now < state.phaseEndsAt) return;
+    if (state.phase === 'MEMORIZE') dispatch({ type: 'START_DRAWING', now: Date.now() });
+    else if (state.phase === 'DRAWING') endRound('timeout');
+  }, [authority, now, state.phase, state.phaseEndsAt, endRound]);
+
+  const remainingMs = state.phaseEndsAt === null ? null : Math.max(0, state.phaseEndsAt - now);
+  const secondsLeft = remainingMs === null ? null : Math.ceil(remainingMs / 1000);
+
+  useEffect(() => {
+    if (state.phase === 'DRAWING' && secondsLeft !== null && secondsLeft > 0 && secondsLeft <= 5) {
       sound.play('tick');
+      vibrate(15, prefs.haptics);
     }
-  }, [game.state.timeRemaining, game.state.phase, sound]);
+  }, [secondsLeft, state.phase, sound, prefs.haptics]);
+
+  // ---- Sounds for phase changes (the same on every device) -------------------------------------
+
+  const lastPhase = useRef(state.phase);
+  useEffect(() => {
+    const prev = lastPhase.current;
+    lastPhase.current = state.phase;
+    if (prev === state.phase) return;
+    if (state.phase === 'REVEAL') {
+      if (state.outcome === 'correct') {
+        sound.play('correct');
+        vibrate([40, 40, 80], prefs.haptics);
+      } else if (state.outcome === 'timeout') sound.play('wrong');
+      else sound.play('whoosh');
+      const id = setTimeout(() => sound.play('whosthat'), 500);
+      return () => clearTimeout(id);
+    }
+    if (state.phase === 'GAME_OVER') sound.play('gameOver');
+    else if (state.phase === 'MEMORIZE' || state.phase === 'DRAWING') sound.play('whoosh');
+  }, [state.phase, state.outcome, sound, prefs.haptics]);
+
+  // ---- Starting and leaving ----------------------------------------------------------------------
+
+  const startLocal = (players: Player[], settings: GameSettings) => {
+    sound.startBgm();
+    setDrawings({});
+    dispatch({ type: 'START_GAME', mode: 'local', players, settings, pokemon: pickRandomPokemon(settings.difficulty) });
+  };
+
+  const startRemote = (settings: GameSettings) => {
+    if (!room.isHost || lobbyPlayers.length !== 2) return;
+    sound.startBgm();
+    setDrawings({});
+    dispatch({ type: 'START_GAME', mode: 'remote', players: lobbyPlayers, settings, pokemon: pickRandomPokemon(settings.difficulty) });
+    beginRoundTimers('remote');
+  };
+
+  const hostRoom = (name: string, avatarId: number) => {
+    sound.startBgm();
+    const me: Player = { id: HOST_ID, nickname: name, avatarId, score: 0 };
+    setLobbyPlayers([me]);
+    setMyId(HOST_ID);
+    myIdRef.current = HOST_ID;
+    void room.host();
+  };
+
+  const joinRoom = (code: string, name: string, avatarId: number) => {
+    sound.startBgm();
+    setLobbyPlayers([]);
+    void room.join(code, { name, avatarId });
+  };
+
+  const goHome = useCallback(() => {
+    room.leave();
+    sound.stopBgm();
+    dispatch({ type: 'RESET' });
+    setScreen('lobby');
+    setLobbyPlayers([]);
+    setDrawings({});
+    setGalleryOpen(false);
+    setConfirmHome(false);
+    setMyId(HOST_ID);
+    myIdRef.current = HOST_ID;
+  }, [room, sound]);
+
+  const requestHome = () => {
+    if (state.phase === 'LOBBY' || state.phase === 'GAME_OVER') goHome();
+    else setConfirmHome(true);
+  };
+
+  // ---- Sharing -----------------------------------------------------------------------------------
+
+  const shareRound = async (round: number) => {
+    const result = state.roundResults.find((r) => r.round === round);
+    const drawing = drawings[round];
+    if (!result || !drawing) return;
+    const drawer = state.players.find((p) => p.id === result.drawerId)?.nickname ?? 'Someone';
+    try {
+      const blob = await composeComparison(drawing.dataUrl, result.pokemon.artworkUrl, `${drawer} drew ${result.pokemon.name}`);
+      const outcome = await shareOrDownload(blob, `${safeFilename(result.pokemon.name, 'by', drawer)}.png`, `${drawer} drew ${result.pokemon.name} in Who's That Pokémon?`);
+      if (outcome === 'downloaded') setNotice('Image saved to your downloads.');
+    } catch {
+      setNotice('Could not create the image. Try downloading from the gallery instead.');
+    }
+  };
+
+  const shareScore = async () => {
+    const text = `Who's That Pokémon? — ${state.players.map((p) => `${p.nickname}: ${p.score}`).join(' | ')}`;
+    try {
+      if (navigator.share) await navigator.share({ title: "Who's That Pokémon?", text });
+      else {
+        await navigator.clipboard.writeText(text);
+        setNotice('Score copied to the clipboard.');
+      }
+    } catch {
+      // Share sheet dismissed.
+    }
+  };
+
+  useEffect(() => {
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(null), 3000);
+    return () => clearTimeout(id);
+  }, [notice]);
+
+  // ---- Render ------------------------------------------------------------------------------------
+
+  const drawer = getDrawer(state);
+  const guesser = getGuesser(state);
+  const winner = getWinner(state);
+  const view = !isRemote ? 'local' : drawer?.id === myId ? 'drawer' : 'guesser';
+  const connectionTrouble = isRemote && (room.status === 'reconnecting' || room.status === 'error');
 
   return (
     <div className="flex flex-col flex-1">
-      {/* Pokedex top bar */}
-      <div className="pokedex-topbar">
-        <span className="logo-text">WHO&apos;S THAT POKEMON?</span>
+      <header className="pokedex-topbar">
+        <span className="logo-text">WHO&apos;S THAT POKÉMON?</span>
         <SettingsPanel
-          bgmEnabled={sound.bgmEnabled}
-          sfxEnabled={sound.sfxEnabled}
-          onToggleBgm={sound.toggleBgm}
-          onToggleSfx={sound.toggleSfx}
-          onGoHome={handleGoHome}
-          roundResults={game.state.roundResults}
+          prefs={prefs}
+          onChangePrefs={updatePrefs}
+          drawingCount={Object.keys(drawings).length}
+          onOpenGallery={() => setGalleryOpen(true)}
+          onGoHome={requestHome}
+          showHome={state.phase !== 'LOBBY' || screen === 'remote'}
         />
-      </div>
+      </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center p-4 w-full">
-        {/* LOBBY */}
-        {screen === 'lobby' && game.state.phase === 'LOBBY' && (
-          <Lobby onStart={handleLocalStart} onRemoteSetup={handleRemoteSetup} />
-        )}
+      <main className="flex-1 flex flex-col items-center justify-center p-3 sm:p-4 w-full">
+        {state.phase === 'LOBBY' && screen === 'lobby' && <Lobby onStartLocal={startLocal} onRemote={() => setScreen('remote')} />}
 
-        {/* REMOTE LOBBY */}
-        {screen === 'remote-lobby' && game.state.phase === 'LOBBY' && (
+        {state.phase === 'LOBBY' && screen === 'remote' && (
           <RemoteLobby
-            onCreateOffer={peer.createOffer}
-            onAcceptOffer={peer.acceptOffer}
-            onAcceptAnswer={peer.acceptAnswer}
-            connected={peer.connected}
-            onStart={handleRemoteStart}
-            onBack={handleBackFromRemote}
+            status={room.status}
+            error={room.error}
+            code={room.code}
+            isHost={room.isHost}
+            players={lobbyPlayers}
+            initialCode={inviteCode}
+            onHost={hostRoom}
+            onJoin={joinRoom}
+            onStart={startRemote}
+            onBack={goHome}
           />
         )}
 
-        {/* MEMORIZE PHASE */}
-        {game.state.phase === 'MEMORIZE' && game.state.currentPokemon && game.drawer && game.guesser && (
+        {state.phase === 'MEMORIZE' && drawer && guesser && (
           <MemorizePhase
-            pokemon={game.state.currentPokemon}
-            drawer={game.drawer}
-            guesser={game.guesser}
-            isLocalMode={game.state.mode === 'local'}
-            onReady={() => {
-              sound.play('whoosh');
-              game.startDrawing();
-            }}
+            pokemon={state.currentPokemon}
+            drawer={drawer}
+            guesser={guesser}
+            view={view}
+            remainingMs={remainingMs}
+            totalSeconds={state.settings.memorizeSeconds}
+            showArtwork={state.settings.showArtwork}
+            onShowMe={() => dispatch({ type: 'BEGIN_MEMORIZE', now: Date.now() })}
+            onReady={() => act('begin-drawing')}
           />
         )}
 
-        {/* DRAWING PHASE */}
-        {game.state.phase === 'DRAWING' && game.state.currentPokemon && game.drawer && game.guesser && (
+        {state.phase === 'DRAWING' && drawer && guesser && (
           <DrawingPhase
-            drawer={game.drawer}
-            guesser={game.guesser}
-            pokemon={game.state.currentPokemon}
-            timeRemaining={game.state.timeRemaining}
-            timerDuration={game.state.timerDuration}
-            chatMessages={game.state.chatMessages}
-            isLocalMode={game.state.mode === 'local'}
-            isDrawer={game.state.mode === 'remote' ? isHostRef.current === (game.state.currentDrawerIndex === 0) : true}
-            onGuess={handleGuess}
-            onCorrectGuess={handleCorrectGuess}
-            onSkip={handleSkip}
-            onTimeUp={handleTimeUp}
-            onDrawEvent={handleDrawEvent}
-            canvasManagerRef={canvasManagerRef}
+            key={state.round}
+            view={view}
+            drawer={drawer}
+            guesser={guesser}
+            remainingMs={remainingMs ?? 0}
+            totalMs={state.settings.timerDuration * 1000}
+            chatMessages={state.chatMessages}
+            canvasManagerRef={canvasRef}
+            onDrawEvent={onDrawEvent}
+            onCorrect={() => act('correct')}
+            onSkip={() => act('skip')}
+            onGuess={guess}
+            onCanvasReady={(m) => m.loadTimeline(remoteStrokesRef.current)}
           />
         )}
 
-        {/* REVEAL PHASE */}
-        {game.state.phase === 'REVEAL' && game.state.currentPokemon && game.drawer && game.guesser && (
+        {state.phase === 'REVEAL' && state.currentPokemon && state.outcome && drawer && guesser && (
           <RevealPhase
-            pokemon={game.state.currentPokemon}
-            guessedCorrectly={game.state.chatMessages.some((m) => m.isCorrect)}
-            drawer={game.drawer}
-            guesser={game.guesser}
-            onNext={handleNextRound}
-            nextLabel={game.winner ? 'See Results' : 'Next Round'}
-            drawingDataUrl={game.state.roundResults[game.state.roundResults.length - 1]?.drawingDataUrl || ''}
+            key={state.round}
+            pokemon={state.currentPokemon}
+            outcome={state.outcome}
+            drawer={drawer}
+            guesser={guesser}
+            drawing={drawings[state.round]}
+            onNext={() => act('next-round')}
+            nextLabel={winner ? 'See results' : 'Next round'}
+            onShare={() => void shareRound(state.round)}
           />
         )}
 
-        {/* GAME OVER */}
-        {game.state.phase === 'GAME_OVER' && game.winner && game.state.players.length === 2 && (
+        {state.phase === 'GAME_OVER' && winner && (
           <GameOverScreen
-            winner={game.winner}
-            players={game.state.players}
-            roundResults={game.state.roundResults}
-            onPlayAgain={handlePlayAgain}
-            onShare={handleShare}
+            winner={winner}
+            players={state.players}
+            roundResults={state.roundResults}
+            onRematch={() => act('rematch')}
+            onNewGame={goHome}
+            onOpenGallery={() => setGalleryOpen(true)}
+            onShare={() => void shareScore()}
           />
         )}
       </main>
 
-      {/* Footer inside pokedex */}
-      <footer className="text-center py-1.5 text-[10px] font-body text-pokemon-gray border-t border-gray-200">
-        Powered by Pok&eacute;API
+      <footer className="text-center py-1.5 text-[10px] font-body text-gray-600 border-t border-gray-200">
+        Unofficial fan project · Pokémon data from PokéAPI · Not affiliated with Nintendo or The Pokémon Company
       </footer>
+
+      {galleryOpen && (
+        <DrawingGallery
+          roundResults={state.roundResults}
+          players={state.players}
+          drawings={drawings}
+          onShare={(round) => void shareRound(round)}
+          onClose={() => setGalleryOpen(false)}
+        />
+      )}
+
+      {confirmHome && (
+        <ConfirmDialog
+          title="Leave this game?"
+          message={isRemote ? 'Your friend will be disconnected and the scores will be lost.' : 'The scores for this game will be lost.'}
+          confirmLabel="Leave game"
+          onConfirm={goHome}
+          onCancel={() => setConfirmHome(false)}
+        />
+      )}
+
+      {connectionTrouble && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-black/60" role="alertdialog" aria-live="assertive">
+          <div className="pokemon-card max-w-xs w-full">
+            <div className="pokemon-card-body text-center space-y-4 font-body">
+              {room.status === 'reconnecting' ? (
+                <>
+                  <div className="w-8 h-8 mx-auto border-4 border-pokemon-red border-t-transparent rounded-full animate-spin" aria-hidden />
+                  <p className="font-bold text-pokemon-dark">{room.isHost ? 'Your friend lost connection' : 'Connection lost'}</p>
+                  <p className="text-sm text-gray-600">{room.isHost ? 'Waiting for them to come back…' : 'Trying to reconnect…'}</p>
+                </>
+              ) : (
+                <p className="font-bold text-pokemon-dark">{room.error ?? 'The connection was lost.'}</p>
+              )}
+              <PokeBallButton onClick={goHome} variant="gray" size="sm" className="w-full">
+                Leave game
+              </PokeBallButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {notice && (
+        <div role="status" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] bg-pokemon-dark text-white text-sm font-body px-4 py-2 rounded-full shadow-lg">
+          {notice}
+        </div>
+      )}
     </div>
   );
 }
