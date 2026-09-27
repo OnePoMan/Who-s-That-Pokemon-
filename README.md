@@ -14,6 +14,8 @@ After each round the answer is revealed as a silhouette below the drawing, with 
 
 **Scoring.** With two players, the guesser scores a point for a correct guess and the first to 3/5/7 points wins. With three or more, the first player to guess and the drawer each score a point (on a shared phone you tap who got it), everyone draws the same number of times (1–3 turns each), and the highest score wins; ties share the win.
 
+**Drawing tools:** pen (pressure-sensitive with a stylus), eraser, fill, line, rectangle, circle, eyedropper, any custom colour (recent colours are remembered), four brush sizes, undo/redo and clear. Pinch with two fingers (or Ctrl/⌘ + scroll) to zoom in for detail; guessers and the TV screen can zoom too.
+
 **Hints** (on by default): letter blanks from the start, the Pokémon's type and generation at the halfway mark, and its first letter with 15 seconds left.
 
 **Settings** (lobby): difficulty, generation and type filters (with a live count of matching Pokémon), drawing time (30/60/90 s), memorize time (5/10/15 s), winning score or turns each, whether the drawer sees the picture or only the name, and hints on/off. **Device settings** (gear icon): music and sound-effect volume, vibration.

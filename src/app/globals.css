@@ -392,3 +392,36 @@ canvas {
 .reaction-float {
   animation: reaction-float 2.5s ease-out forwards;
 }
+
+/* Drawing toolbar icon buttons. */
+.tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border-radius: 0.75rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  transition: background-color 0.15s, transform 0.1s;
+}
+.tool-button:hover:not(:disabled) { background: var(--surface-2); }
+.tool-button:active:not(:disabled) { transform: scale(0.94); }
+.tool-button:disabled { opacity: 0.35; }
+.tool-button.active {
+  background: var(--pokemon-blue);
+  border-color: var(--pokemon-blue);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(59, 76, 202, 0.4);
+}
+.tool-button.danger { color: var(--pokemon-red); }
+
+/* The "any colour" swatch shows a colour wheel. */
+.color-wheel {
+  background: conic-gradient(#ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+}
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

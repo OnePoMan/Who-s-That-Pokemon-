@@ -1,7 +1,7 @@
 // Messages exchanged between the two phones in a remote game. The host runs the game; the
 // guest sends intents and renders the state the host sends back. Anything arriving from the
 // other device is untrusted, so each message is validated before it is used.
-import { CANVAS_SIZE, MAX_BRUSH, type DrawEvent } from '../canvas-engine';
+import { CANVAS_SIZE, MAX_BRUSH, SHAPES, type DrawEvent } from '../canvas-engine';
 import { getPokemon, TYPES } from '../pokedex';
 import type { Hint } from '../hints';
 import {
@@ -138,6 +138,10 @@ export function validateDrawEvent(e: unknown): DrawEvent | null {
     case 'fill':
       return isNum(e.x, 0, CANVAS_SIZE) && isNum(e.y, 0, CANVAS_SIZE) && isColor(e.color)
         ? { type: 'fill', x: e.x, y: e.y, color: e.color }
+        : null;
+    case 'shape':
+      return oneOf(e.shape, SHAPES) && coord(e.x1) && coord(e.y1) && coord(e.x2) && coord(e.y2) && isColor(e.color) && isNum(e.size, 1, MAX_BRUSH)
+        ? { type: 'shape', shape: e.shape, x1: e.x1 as number, y1: e.y1 as number, x2: e.x2 as number, y2: e.y2 as number, color: e.color, size: e.size }
         : null;
     case 'stroke-end':
     case 'undo':

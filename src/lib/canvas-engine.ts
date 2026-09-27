@@ -26,18 +26,23 @@ export type DrawEvent =
   | { type: 'stroke-move'; x: number; y: number; p?: number }
   | { type: 'stroke-end' }
   | { type: 'fill'; x: number; y: number; color: string }
+  | { type: 'shape'; shape: ShapeKind; x1: number; y1: number; x2: number; y2: number; color: string; size: number }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'clear' };
+
+export type ShapeKind = 'line' | 'rect' | 'ellipse';
+export const SHAPES: readonly ShapeKind[] = ['line', 'rect', 'ellipse'];
 
 type Point = [x: number, y: number, pressure: number];
 
 type Op =
   | { kind: 'stroke'; color: string; size: number; points: Point[] }
   | { kind: 'fill'; x: number; y: number; color: string; spans?: Int32Array }
+  | { kind: 'shape'; shape: ShapeKind; x1: number; y1: number; x2: number; y2: number; color: string; size: number }
   | { kind: 'clear' };
 
-export type Tool = 'pen' | 'eraser' | 'fill';
+export type Tool = 'pen' | 'eraser' | 'fill' | 'picker' | ShapeKind;
 
 export class CanvasManager {
   private readonly canvas: HTMLCanvasElement;
@@ -115,6 +120,17 @@ export class CanvasManager {
   fillAt(x: number, y: number) {
     this.emit({ type: 'fill', x, y, color: this.color });
   }
+  drawShape(shape: ShapeKind, x1: number, y1: number, x2: number, y2: number) {
+    this.emit({ type: 'shape', shape, x1, y1, x2, y2, color: this.color, size: this.size });
+  }
+
+  /** The colour at a point, as #RRGGBB (for the eyedropper). */
+  pickColor(x: number, y: number): string {
+    const px = Math.min(this.canvas.width - 1, Math.max(0, Math.floor(x * this.dpr)));
+    const py = Math.min(this.canvas.height - 1, Math.max(0, Math.floor(y * this.dpr)));
+    const [r, g, b] = this.ctx.getImageData(px, py, 1, 1).data;
+    return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+  }
   undo() {
     if (this.canUndo) this.emit({ type: 'undo' });
   }
@@ -173,6 +189,14 @@ export class CanvasManager {
         this.renderFill(op);
         break;
       }
+      case 'shape': {
+        this.activeStroke = null;
+        const op: Op = { kind: 'shape', shape: event.shape, x1: event.x1, y1: event.y1, x2: event.x2, y2: event.y2, color: event.color, size: event.size };
+        this.ops.push(op);
+        this.redoStack = [];
+        this.renderOp(op);
+        break;
+      }
       case 'clear':
         this.activeStroke = null;
         this.ops.push({ kind: 'clear' });
@@ -213,6 +237,8 @@ export class CanvasManager {
         );
       case 'fill':
         return this.ops.length < MAX_OPS && this.fillCount < MAX_FILLS;
+      case 'shape':
+        return this.ops.length < MAX_OPS;
       case 'clear':
         return this.ops.length < MAX_OPS;
       default:
@@ -270,6 +296,7 @@ export class CanvasManager {
   private renderOp(op: Op) {
     if (op.kind === 'clear') this.paintBackground();
     else if (op.kind === 'fill') this.renderFill(op);
+    else if (op.kind === 'shape') renderShape(this.ctx, op);
     else if (op.points.length > 1 && op.points.every((pt) => pt[2] === op.points[0][2])) {
       this.strokeWholePath(op);
     } else {
@@ -430,4 +457,25 @@ export class CanvasManager {
 export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const m = /^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : null;
+}
+
+/** Draws a line, rectangle or ellipse outline; also used for the live preview while dragging. */
+export function renderShape(
+  ctx: CanvasRenderingContext2D,
+  s: { shape: ShapeKind; x1: number; y1: number; x2: number; y2: number; color: string; size: number },
+) {
+  ctx.strokeStyle = s.color;
+  ctx.lineWidth = s.size;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  if (s.shape === 'line') {
+    ctx.moveTo(s.x1, s.y1);
+    ctx.lineTo(s.x2, s.y2);
+  } else if (s.shape === 'rect') {
+    ctx.rect(Math.min(s.x1, s.x2), Math.min(s.y1, s.y2), Math.abs(s.x2 - s.x1), Math.abs(s.y2 - s.y1));
+  } else {
+    ctx.ellipse((s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2, Math.abs(s.x2 - s.x1) / 2, Math.abs(s.y2 - s.y1) / 2, 0, 0, Math.PI * 2);
+  }
+  ctx.stroke();
 }

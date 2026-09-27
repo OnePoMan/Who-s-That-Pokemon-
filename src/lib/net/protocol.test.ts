@@ -66,6 +66,14 @@ describe('validateMessage', () => {
     expect(validateMessage({ t: 'draw', e: { type: 'stroke-move', x: 10, y: 10 } })).not.toBeNull();
   });
 
+  it('validates shapes like strokes', () => {
+    const rect = { type: 'shape', shape: 'rect', x1: 10, y1: 10, x2: 200, y2: 150, color: '#3B4CCA', size: 8 };
+    expect(validateMessage({ t: 'draw', e: rect })).toEqual({ t: 'draw', e: rect });
+    expect(validateMessage({ t: 'draw', e: { ...rect, shape: 'star' } })).toBeNull();
+    expect(validateMessage({ t: 'draw', e: { ...rect, x2: 1e6 } })).toBeNull();
+    expect(validateMessage({ t: 'draw', e: { ...rect, size: 0 } })).toBeNull();
+  });
+
   it('accepts strokes whose missing pressure arrives as null', () => {
     // PeerJS's binary encoding sends undefined fields as null.
     const msg = validateMessage({ t: 'draw', e: { type: 'stroke-start', x: 10, y: 10, color: '#000000', size: 4, p: null } });
