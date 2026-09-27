@@ -77,7 +77,51 @@ async function main() {
     else console.warn(`skip ${c.label} (#${c.id}): no official artwork`);
   }
 
-  const out = { generatedAt: new Date().toISOString().slice(0, 10), species, forms };
+  // Types and the generation that introduced each Pokémon or form, for filters and hints.
+  const ids = [...species.map(([id]) => id), ...forms.map(([id]) => id)];
+  const details = await getJson(GRAPHQL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      query: `{ pokemon_v2_pokemon(where:{id:{_in:[${ids.join(',')}]}}){ id pokemon_v2_pokemontypes(order_by:{slot:asc}){ pokemon_v2_type{ name } } pokemon_v2_pokemonforms(order_by:{id:asc}){ pokemon_v2_versiongroup{ generation_id } } pokemon_v2_pokemonspecy{ generation_id } } }`,
+    }),
+  });
+  const info = new Map(
+    details.data.pokemon_v2_pokemon.map((p) => [
+      p.id,
+      {
+        types: p.pokemon_v2_pokemontypes.map((t) => t.pokemon_v2_type.name),
+        gen:
+          p.id > 10000
+            ? p.pokemon_v2_pokemonforms[0]?.pokemon_v2_versiongroup.generation_id ?? p.pokemon_v2_pokemonspecy.generation_id
+            : p.pokemon_v2_pokemonspecy.generation_id,
+      },
+    ]),
+  );
+  // PokéAPI's GraphQL database can lag the REST API (e.g. the newest Megas); fill gaps from REST.
+  for (const id of ids.filter((id) => !info.has(id))) {
+    const p = await getJson(`${API}/pokemon/${id}`);
+    const form = await getJson(p.forms[0].url);
+    const versionGroup = await getJson(form.version_group.url);
+    info.set(id, {
+      types: p.types.sort((a, b) => a.slot - b.slot).map((t) => t.type.name),
+      gen: Number(versionGroup.generation.url.match(/\/(\d+)\/$/)[1]),
+    });
+  }
+
+  const withInfo = (row) => {
+    const d = info.get(row[0]);
+    if (!d) throw new Error(`No type/generation data for #${row[0]}`);
+    return [...row, d.gen, d.types];
+  };
+
+  const out = {
+    generatedAt: new Date().toISOString().slice(0, 10),
+    // [id, name, generation, types]
+    species: species.map(withInfo),
+    // [id, name, speciesId, generation, types]
+    forms: forms.map(withInfo),
+  };
   await writeFile(new URL('../src/data/pokemon-index.json', import.meta.url), JSON.stringify(out) + '\n');
   console.log(`species: ${species.length}, forms: ${forms.length}`);
 }

@@ -9,7 +9,7 @@ interface MemorizePhaseProps {
   /** Null when this device belongs to the guesser in a remote game. */
   pokemon: PokemonData | null;
   drawer: Player;
-  guesser: Player;
+  guessers: Player[];
   /** 'local' shows the pass-the-phone handoff first. */
   view: 'local' | 'drawer' | 'guesser';
   /** Null until the drawer has the phone and taps "Show me". */
@@ -23,7 +23,7 @@ interface MemorizePhaseProps {
 export default function MemorizePhase({
   pokemon,
   drawer,
-  guesser,
+  guessers,
   view,
   remainingMs,
   totalSeconds,
@@ -54,8 +54,8 @@ export default function MemorizePhase({
         </div>
         <div className="pokemon-card w-full max-w-xs">
           <div className="pokemon-card-body text-center font-body">
-            <p className="text-sm text-pokemon-dark">
-              <span className="font-bold">{guesser.nickname}</span>, look away!
+            <p className="text-sm text-ink">
+              <span className="font-bold">{listNames(guessers)}</span>, look away!
             </p>
             <p className="text-xs text-pokemon-gray mt-1">
               You&apos;ll get the signal to watch once the Pokémon is hidden.
@@ -75,7 +75,7 @@ export default function MemorizePhase({
     <div className="flex flex-col items-center gap-3 animate-fade-in w-full">
       {view === 'local' && (
         <p className="font-body text-xs font-bold text-pokemon-red bg-red-50 border border-pokemon-red/30 rounded-full px-3 py-1">
-          {guesser.nickname}, no peeking!
+          {guessers.length === 1 ? `${guessers[0].nickname}, no peeking!` : 'Everyone else, no peeking!'}
         </p>
       )}
       <h2 className="font-pixel text-xs text-pokemon-dark text-center leading-relaxed">Memorize this Pokémon!</h2>
@@ -116,4 +116,10 @@ function Countdown({ remainingMs, totalSeconds }: { remainingMs: number; totalSe
       <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-pokemon-dark font-body">{seconds}</span>
     </div>
   );
+}
+
+export function listNames(players: Player[]): string {
+  const names = players.map((p) => p.nickname);
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }

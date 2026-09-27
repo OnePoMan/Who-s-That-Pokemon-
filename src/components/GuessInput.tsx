@@ -7,6 +7,7 @@ import { MAX_GUESS_LENGTH } from '@/lib/net/protocol';
 interface GuessInputProps {
   onGuess: (text: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
 /**
@@ -14,7 +15,7 @@ interface GuessInputProps {
  * alphabetically; tapping one (or Enter on the highlighted one) submits it, so spelling never
  * decides the round.
  */
-export default function GuessInput({ onGuess, disabled = false }: GuessInputProps) {
+export default function GuessInput({ onGuess, disabled = false, placeholder = 'Start typing a Pokémon…' }: GuessInputProps) {
   const [text, setText] = useState('');
   const [highlight, setHighlight] = useState(0);
   const [open, setOpen] = useState(false);
@@ -98,7 +99,7 @@ export default function GuessInput({ onGuess, disabled = false }: GuessInputProp
           value={text}
           maxLength={MAX_GUESS_LENGTH}
           disabled={disabled}
-          placeholder={disabled ? 'Waiting…' : 'Start typing a Pokémon…'}
+          placeholder={disabled ? 'Waiting…' : placeholder}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="words"

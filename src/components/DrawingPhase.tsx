@@ -4,19 +4,22 @@ import { useEffect, useState } from 'react';
 import DrawingCanvas from './DrawingCanvas';
 import ChatPanel from './ChatPanel';
 import GuessInput from './GuessInput';
+import HintBar from './HintBar';
 import Timer from './Timer';
 import { AvatarIcon } from './AvatarPicker';
 import type { ChatMessage, Player } from '@/lib/game-state';
 import type { CanvasManager, DrawEvent } from '@/lib/canvas-engine';
+import type { Hint } from '@/lib/hints';
 
 interface DrawingPhaseProps {
-  /** 'local': one phone, guesser watches over the drawer's shoulder. */
+  /** 'local': one phone, guessers watch over the drawer's shoulder. */
   view: 'local' | 'drawer' | 'guesser';
   drawer: Player;
-  guesser: Player;
+  guessers: Player[];
   remainingMs: number;
   totalMs: number;
   chatMessages: ChatMessage[];
+  hint: Hint | null;
   canvasManagerRef: React.MutableRefObject<CanvasManager | null>;
   onDrawEvent?: (event: DrawEvent) => void;
   onCorrect: () => void;
@@ -28,10 +31,11 @@ interface DrawingPhaseProps {
 export default function DrawingPhase({
   view,
   drawer,
-  guesser,
+  guessers,
   remainingMs,
   totalMs,
   chatMessages,
+  hint,
   canvasManagerRef,
   onDrawEvent,
   onCorrect,
@@ -42,6 +46,7 @@ export default function DrawingPhase({
   const [showLookBanner, setShowLookBanner] = useState(view === 'local');
   // Disables the buttons after the first tap; the game state also ignores repeats.
   const [ended, setEnded] = useState(false);
+  const soloGuesser = guessers.length === 1 ? guessers[0] : null;
 
   useEffect(() => {
     if (!showLookBanner) return;
@@ -59,9 +64,7 @@ export default function DrawingPhase({
     <div className="flex items-center gap-3 w-full">
       <div className="flex items-center gap-2 shrink-0">
         <AvatarIcon avatarId={drawer.avatarId} size="sm" />
-        <span className="text-xs font-bold text-pokemon-dark font-body">
-          {view === 'drawer' ? 'You are drawing' : `${drawer.nickname} is drawing`}
-        </span>
+        <span className="text-xs font-bold text-ink font-body">{view === 'drawer' ? 'You are drawing' : `${drawer.nickname} is drawing`}</span>
       </div>
       <Timer remainingMs={remainingMs} totalMs={totalMs} />
     </div>
@@ -73,7 +76,7 @@ export default function DrawingPhase({
         type="button"
         onClick={end(onCorrect)}
         disabled={ended}
-        className="flex-1 py-3 rounded-xl text-lg font-bold font-body text-white bg-gradient-to-b from-green-500 to-green-600 border-2 border-b-4 border-green-700 hover:from-green-400 hover:to-green-500 active:scale-95 active:border-b-2 active:translate-y-[2px] transition-all shadow-md disabled:opacity-50"
+        className="flex-1 py-2.5 rounded-xl text-base font-bold font-body text-white bg-gradient-to-b from-green-500 to-green-600 border-2 border-b-4 border-green-700 hover:from-green-400 hover:to-green-500 active:scale-95 active:border-b-2 active:translate-y-[2px] transition-all shadow-md disabled:opacity-50"
       >
         {correctLabel}
       </button>
@@ -81,7 +84,7 @@ export default function DrawingPhase({
         type="button"
         onClick={end(onSkip)}
         disabled={ended}
-        className="flex-1 py-3 rounded-xl text-lg font-bold font-body text-white bg-gradient-to-b from-gray-400 to-gray-500 border-2 border-b-4 border-gray-600 hover:from-gray-300 hover:to-gray-400 active:scale-95 active:border-b-2 active:translate-y-[2px] transition-all shadow-md disabled:opacity-50"
+        className="flex-1 py-2.5 rounded-xl text-base font-bold font-body text-white bg-gradient-to-b from-gray-400 to-gray-500 border-2 border-b-4 border-gray-600 hover:from-gray-300 hover:to-gray-400 active:scale-95 active:border-b-2 active:translate-y-[2px] transition-all shadow-md disabled:opacity-50"
       >
         {skipLabel}
       </button>
@@ -89,36 +92,57 @@ export default function DrawingPhase({
   );
 
   if (view === 'local') {
+    const misses = chatMessages.filter((m) => !m.isCorrect).map((m) => m.text);
     return (
-      <div className="flex flex-col gap-2 w-full animate-fade-in">
+      <div data-fit-root className="flex flex-col gap-2 w-full animate-fade-in">
         {header}
-        {showLookBanner && (
-          <div role="status" className="flash-green bg-green-600 rounded-xl px-3 py-2 text-center text-white font-body font-bold text-sm">
-            {guesser.nickname}, you can look now! Shout out your guesses.
-          </div>
+        {hint && <HintBar hint={hint} />}
+        <div className="relative">
+          {showLookBanner && (
+            // Floats over the canvas so the layout doesn't jump when it disappears.
+            <div
+              role="status"
+              className="flash-green bg-green-600 absolute top-2 inset-x-2 z-10 rounded-xl px-3 py-2 text-center text-white font-body font-bold text-sm shadow-lg pointer-events-none"
+            >
+              {soloGuesser ? `${soloGuesser.nickname}, you can look now!` : 'Everyone can look now!'} Guess out loud or type below.
+            </div>
+          )}
+          <DrawingCanvas canvasManagerRef={canvasManagerRef} onDrawEvent={onDrawEvent} />
+        </div>
+        {misses.length > 0 && (
+          <p className="text-xs font-body text-ink-muted text-center truncate" aria-live="polite">
+            Not it: {misses.slice(-4).join(', ')}
+          </p>
         )}
-        <DrawingCanvas canvasManagerRef={canvasManagerRef} onDrawEvent={onDrawEvent} reservedHeight={400} />
-        {resultButtons(`${guesser.nickname} got it!`, 'Skip')}
+        <GuessInput onGuess={onGuess} disabled={ended} placeholder="Guesser: type a Pokémon…" />
+        {resultButtons(soloGuesser ? `${soloGuesser.nickname} got it!` : 'Someone got it!', 'Skip')}
       </div>
     );
   }
 
   if (view === 'drawer') {
     return (
-      <div className="flex flex-col gap-2 w-full animate-fade-in">
+      <div data-fit-root className="flex flex-col gap-2 w-full animate-fade-in">
         {header}
-        <DrawingCanvas canvasManagerRef={canvasManagerRef} onDrawEvent={onDrawEvent} reservedHeight={500} />
-        <ChatPanel messages={chatMessages} title={`${guesser.nickname}'s guesses`} />
-        {resultButtons('They got it!', 'Give up')}
+        <DrawingCanvas canvasManagerRef={canvasManagerRef} onDrawEvent={onDrawEvent} onReady={onCanvasReady} />
+        <ChatPanel messages={chatMessages} title="Guesses" />
+        {resultButtons(soloGuesser ? 'They got it!' : 'Someone got it!', 'Give up')}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2 w-full animate-fade-in">
+    <div data-fit-root className="flex flex-col gap-2 w-full animate-fade-in">
       {header}
-      <DrawingCanvas readOnly canvasManagerRef={canvasManagerRef} onReady={onCanvasReady} reservedHeight={330} label={`${drawer.nickname}'s drawing`} />
-      <ChatPanel messages={chatMessages} title="Your guesses" />
+      {hint && <HintBar hint={hint} />}
+      <DrawingCanvas
+        readOnly
+        canvasManagerRef={canvasManagerRef}
+        onReady={onCanvasReady}
+       
+        label={`${drawer.nickname}'s drawing`}
+      />
+      <ChatPanel messages={chatMessages} title="Guesses" />
       <GuessInput onGuess={onGuess} />
     </div>
   );

@@ -17,6 +17,12 @@
   --pokemon-black: #1A1A1A;
   --pokemon-cream: #FFF8E7;
   --background: #E8E0D0;
+  /* Semantic tokens: components use these so a theme can redefine them in one place. */
+  --surface: #FFFFFF;
+  --surface-2: #F3F4F6;
+  --ink: #2B2B2B;
+  --ink-muted: #5F5F5F;
+  --line: #2B2B2B;
   --foreground: #1A1A1A;
   /* Fonts are self-hosted by next/font (see layout.tsx). */
   --font-pixel: var(--font-press-start), 'Press Start 2P', monospace;
@@ -40,6 +46,11 @@
   --color-pokemon-dark: var(--pokemon-dark);
   --color-pokemon-black: var(--pokemon-black);
   --color-pokemon-cream: var(--pokemon-cream);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
 }
 
 body {
@@ -354,4 +365,20 @@ canvas {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.settings-legend {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--ink);
+}
+
+/* Short screens: a slimmer top bar leaves more room for the canvas. */
+@media (max-height: 700px) {
+  .pokedex-topbar { padding-top: 4px; padding-bottom: 4px; }
 }

@@ -26,8 +26,6 @@ interface DrawingCanvasProps {
   onDrawEvent?: (event: DrawEvent) => void;
   readOnly?: boolean;
   canvasManagerRef?: React.MutableRefObject<CanvasManager | null>;
-  /** Vertical space (px) the rest of the screen needs, so the canvas fits without scrolling. */
-  reservedHeight?: number;
   label?: string;
   /** Called once the engine exists, e.g. to load strokes that arrived before it mounted. */
   onReady?: (manager: CanvasManager) => void;
@@ -37,7 +35,6 @@ export default function DrawingCanvas({
   onDrawEvent,
   readOnly = false,
   canvasManagerRef,
-  reservedHeight = 320,
   label = 'Drawing canvas',
   onReady,
 }: DrawingCanvasProps) {
@@ -48,6 +45,31 @@ export default function DrawingCanvas({
   const [size, setSize] = useState(4);
   const [tool, setTool] = useState<Tool>('pen');
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [side, setSide] = useState<number | null>(null);
+
+  // Size the canvas to the space left on screen: everything else inside the nearest
+  // [data-fit-root] keeps its size, and the canvas takes the rest (square, 150–600px).
+  useEffect(() => {
+    const box = boxRef.current;
+    const root = box?.closest<HTMLElement>('[data-fit-root]');
+    if (!box || !root) return;
+    const fit = () => {
+      const others = root.scrollHeight - box.offsetHeight;
+      const top = root.getBoundingClientRect().top + window.scrollY;
+      const available = window.innerHeight - top - others - 12;
+      const width = box.parentElement?.clientWidth ?? 600;
+      setSide(Math.floor(Math.max(150, Math.min(600, width, available))));
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(root);
+    window.addEventListener('resize', fit);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', fit);
+    };
+  }, []);
   const lastActionAt = useRef(-Infinity);
   const paced = (e: { timeStamp: number }) => {
     if (e.timeStamp - lastActionAt.current < MIN_ACTION_GAP_MS) return false;
@@ -147,8 +169,9 @@ export default function DrawingCanvas({
   return (
     <div className="flex flex-col items-center gap-2 w-full">
       <div
+        ref={boxRef}
         className="relative aspect-square bg-white rounded-xl shadow-lg overflow-hidden border-3 border-pokemon-dark"
-        style={{ width: `min(100%, 600px, calc(100dvh - ${reservedHeight}px))`, minWidth: 220 }}
+        style={{ width: side ?? 'min(100%, 600px, 45dvh)' }}
       >
         <canvas
           ref={canvasRef}
@@ -160,15 +183,15 @@ export default function DrawingCanvas({
       </div>
 
       {!readOnly && (
-        <div className="w-full max-w-[600px] space-y-2" role="toolbar" aria-label="Drawing tools">
-          <div className="flex gap-1.5 justify-center flex-wrap">
+        <div className="w-full max-w-[600px] space-y-1.5" role="toolbar" aria-label="Drawing tools">
+          <div className="flex gap-1 justify-center flex-wrap">
             {(['pen', 'eraser', 'fill'] as Tool[]).map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => selectTool(t)}
                 aria-pressed={tool === t}
-                className={`pokemon-toggle px-3 py-1.5 text-xs font-body capitalize ${tool === t ? 'active' : ''}`}
+                className={`pokemon-toggle px-2.5 py-1 text-xs font-body capitalize ${tool === t ? 'active' : ''}`}
               >
                 {t}
               </button>
@@ -178,7 +201,7 @@ export default function DrawingCanvas({
               type="button"
               onClick={(e) => paced(e) && managerRef.current?.undo()}
               disabled={!history.canUndo}
-              className="pokemon-toggle px-3 py-1.5 text-xs font-body disabled:opacity-40"
+              className="pokemon-toggle px-2.5 py-1 text-xs font-body disabled:opacity-40"
             >
               Undo
             </button>
@@ -186,20 +209,20 @@ export default function DrawingCanvas({
               type="button"
               onClick={(e) => paced(e) && managerRef.current?.redo()}
               disabled={!history.canRedo}
-              className="pokemon-toggle px-3 py-1.5 text-xs font-body disabled:opacity-40"
+              className="pokemon-toggle px-2.5 py-1 text-xs font-body disabled:opacity-40"
             >
               Redo
             </button>
             <button
               type="button"
               onClick={(e) => paced(e) && managerRef.current?.clear()}
-              className="px-3 py-1.5 rounded-full text-xs font-bold font-body bg-pokemon-red text-white border-2 border-pokemon-red-dark hover:bg-pokemon-red-dark transition-colors"
+              className="px-2.5 py-1 rounded-full text-xs font-bold font-body bg-pokemon-red text-white border-2 border-pokemon-red-dark hover:bg-pokemon-red-dark transition-colors"
             >
               Clear
             </button>
           </div>
 
-          <div className="flex gap-1.5 justify-center flex-wrap" role="radiogroup" aria-label="Colour">
+          <div className="flex gap-1 justify-center" role="radiogroup" aria-label="Colour">
             {COLORS.map(({ hex, name }) => (
               <button
                 key={hex}
@@ -209,7 +232,7 @@ export default function DrawingCanvas({
                 aria-label={name}
                 title={name}
                 onClick={() => selectColor(hex)}
-                className={`w-8 h-8 rounded-full border-2 transition-transform ${
+                className={`w-[min(7vw,28px)] aspect-square shrink-0 rounded-full border-2 transition-transform ${
                   color === hex ? 'border-pokemon-blue scale-125 shadow-lg' : 'border-gray-300 hover:scale-110'
                 }`}
                 style={{ backgroundColor: hex }}
@@ -226,7 +249,7 @@ export default function DrawingCanvas({
                 aria-checked={size === s}
                 aria-label={`Brush size ${s}`}
                 onClick={() => selectSize(s)}
-                className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
+                className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
                   size === s ? 'bg-pokemon-blue shadow-lg' : 'bg-gray-200 hover:bg-gray-300'
                 }`}
               >

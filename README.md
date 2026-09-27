@@ -1,16 +1,20 @@
 # Who's That Pokémon? — Draw & Guess
 
-A drawing and guessing game for two players. One player gets a few seconds to memorize a Pokémon, then draws it from memory; the other guesses. First to the target score wins. It runs in the browser and can be installed on a phone's home screen.
+A drawing and guessing game for 2–8 players. One player gets a few seconds to memorize a Pokémon, then draws it from memory while everyone else guesses. It runs in the browser and can be installed on a phone's home screen.
 
 ## How to play
 
-**One phone.** Hand the phone to the drawer; the guesser looks away. The drawer taps *Show me*, memorizes the Pokémon, then starts drawing. A banner tells the guesser to look, and they shout out guesses while watching. Either player taps *…got it!* or *Skip*. Roles swap every round.
+**One phone.** Hand the phone to the drawer; everyone else looks away. The drawer taps *Show me*, memorizes the Pokémon, then starts drawing. A banner tells the guessers to look; they shout guesses or type one into the guess box under the canvas (a name dropdown appears after the first letter, and a correct pick ends the round). *…got it!* and *Skip* are there for shouted guesses. Everyone takes a turn drawing.
 
 **Two phones.** One player taps *Play on two phones → Create a room* and shares the six-character code (or the invite link, which fills the code in). The other joins with it. The drawer's strokes appear live on the guesser's phone; the guesser types a guess and picks a name from the dropdown, so spelling never decides the round. The drawer can also confirm a guess or give up.
 
 After each round the answer is revealed as a silhouette below the drawing, with a timelapse replay and a share card. Every drawing from the session is in the gallery (settings menu, or at the end of the game) to download or share.
 
-**Settings** (lobby): difficulty, drawing time (30/60/90 s), memorize time (5/10/15 s), first to 3/5/7 points, and whether the drawer sees the picture or only the name. **Device settings** (gear icon): music and sound-effect volume, vibration.
+**Scoring.** With two players, the guesser scores a point for a correct guess and the first to 3/5/7 points wins. With three or more, the first player to guess and the drawer each score a point (on a shared phone you tap who got it), everyone draws the same number of times (1–3 turns each), and the highest score wins; ties share the win.
+
+**Hints** (on by default): letter blanks from the start, the Pokémon's type and generation at the halfway mark, and its first letter with 15 seconds left.
+
+**Settings** (lobby): difficulty, generation and type filters (with a live count of matching Pokémon), drawing time (30/60/90 s), memorize time (5/10/15 s), winning score or turns each, whether the drawer sees the picture or only the name, and hints on/off. **Device settings** (gear icon): music and sound-effect volume, vibration.
 
 Difficulty: *Easy* is ~160 well-known Pokémon, *Medium* ~370, *Hard* all 1,025 plus 150 Mega, Primal and regional forms (Alolan, Galarian, Hisuian, Paldean).
 

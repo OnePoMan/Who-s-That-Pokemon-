@@ -92,7 +92,7 @@ export default function RemoteLobby({ status, error, code, isHost, players, init
           )}
         </div>
 
-        <GameSettingsForm settings={settings} onChange={setSettings} />
+        <GameSettingsForm settings={settings} onChange={setSettings} playerCount={Math.max(2, players.length)} />
 
         <div className="flex gap-3 w-full">
           <PokeBallButton onClick={onBack} variant="gray" size="md" className="flex-1">

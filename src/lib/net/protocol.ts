@@ -2,11 +2,14 @@
 // guest sends intents and renders the state the host sends back. Anything arriving from the
 // other device is untrusted, so each message is validated before it is used.
 import { CANVAS_SIZE, MAX_BRUSH, type DrawEvent } from '../canvas-engine';
-import { getPokemon } from '../pokedex';
+import { getPokemon, TYPES } from '../pokedex';
+import type { Hint } from '../hints';
 import {
   DIFFICULTIES,
+  MAX_PLAYERS,
   MEMORIZE_OPTIONS,
   TIMER_OPTIONS,
+  TURNS_OPTIONS,
   WIN_SCORE_OPTIONS,
   type ChatMessage,
   type GameSettings,
@@ -29,8 +32,11 @@ export const MAX_TIMELINE_EVENTS = 25000;
 export type Intent = 'begin-drawing' | 'correct' | 'skip' | 'next-round' | 'rematch';
 const INTENTS: readonly Intent[] = ['begin-drawing', 'correct', 'skip', 'next-round', 'rematch'];
 
-/** Game state on the wire: the deadline travels as time remaining, since clocks differ. */
-export type WireState = Omit<GameState, 'phaseEndsAt'> & { remainingMs: number | null };
+/**
+ * Game state on the wire: the deadline travels as time remaining, since clocks differ, and
+ * guessers get the hints unlocked so far instead of the answer.
+ */
+export type WireState = Omit<GameState, 'phaseEndsAt'> & { remainingMs: number | null; hint: Hint | null };
 
 export type Message =
   | { t: 'hello'; v: number; clientId: string; name: string; avatarId: number }
@@ -39,6 +45,7 @@ export type Message =
   | { t: 'reject'; reason: 'full' | 'version' }
   | { t: 'state'; state: WireState }
   | { t: 'intent'; intent: Intent }
+  | { t: 'assign'; playerId: string }
   | { t: 'guess'; text: string }
   | { t: 'draw'; e: DrawEvent }
   | { t: 'canvas'; round: number; events: DrawEvent[] };
@@ -75,7 +82,7 @@ export function cleanText(value: unknown, max: number): string | null {
 
 // ---- Serialization ---------------------------------------------------------------------------
 
-export function toWire(state: GameState, viewerId: string, now: number): WireState {
+export function toWire(state: GameState, viewerId: string, now: number, hint: Hint | null = null): WireState {
   const { phaseEndsAt, ...rest } = state;
   const viewerIsDrawer = state.players[state.currentDrawerIndex]?.id === viewerId;
   // The guesser must not receive the answer before the reveal.
@@ -85,12 +92,13 @@ export function toWire(state: GameState, viewerId: string, now: number): WireSta
     currentPokemon: hideAnswer ? null : state.currentPokemon,
     usedPokemonIds: [],
     remainingMs: phaseEndsAt === null ? null : Math.max(0, phaseEndsAt - now),
+    hint: hideAnswer && state.phase === 'DRAWING' ? hint : null,
   };
 }
 
-export function fromWire(wire: WireState, now: number): GameState {
-  const { remainingMs, ...rest } = wire;
-  return { ...rest, phaseEndsAt: remainingMs === null ? null : now + remainingMs };
+export function fromWire(wire: WireState, now: number): { state: GameState; hint: Hint | null } {
+  const { remainingMs, hint, ...rest } = wire;
+  return { state: { ...rest, phaseEndsAt: remainingMs === null ? null : now + remainingMs }, hint };
 }
 
 // ---- Validation ------------------------------------------------------------------------------
@@ -153,16 +161,43 @@ function validateSettings(s: unknown): GameSettings | null {
     !oneOf(s.timerDuration, TIMER_OPTIONS) ||
     !oneOf(s.memorizeSeconds, MEMORIZE_OPTIONS) ||
     !oneOf(s.winScore, WIN_SCORE_OPTIONS) ||
-    typeof s.showArtwork !== 'boolean'
+    !oneOf(s.turnsEach, TURNS_OPTIONS) ||
+    typeof s.showArtwork !== 'boolean' ||
+    typeof s.hints !== 'boolean'
   )
     return null;
+  const generations = validateArray(s.generations, 9, (g) => (isInt(g, 1, 9) ? g : null));
+  const types = validateArray(s.types, TYPES.length, (t) => (oneOf(t, TYPES) ? t : null));
+  if (!generations || !types) return null;
   return {
     difficulty: s.difficulty,
     timerDuration: s.timerDuration,
     memorizeSeconds: s.memorizeSeconds,
     winScore: s.winScore,
+    turnsEach: s.turnsEach,
     showArtwork: s.showArtwork,
+    hints: s.hints,
+    generations,
+    types,
   };
+}
+
+function validateHint(h: unknown): Hint | null {
+  if (!isObj(h)) return null;
+  const blanks = validateArray(h.blanks, 40, (c) => (typeof c === 'string' && [...c].length === 1 ? c : null));
+  if (!blanks) return null;
+  const hint: Hint = { blanks };
+  if (h.types !== undefined && h.types !== null) {
+    const types = validateArray(h.types, 2, (t) => (oneOf(t, TYPES) ? t : null));
+    if (!types) return null;
+    hint.types = types;
+  }
+  if (h.generation !== undefined && h.generation !== null) {
+    if (!isInt(h.generation, 1, 9)) return null;
+    hint.generation = h.generation;
+    hint.region = cleanText(h.region, 12) ?? undefined;
+  }
+  return hint;
 }
 
 const OUTCOMES: readonly RoundOutcome[] = ['correct', 'skipped', 'timeout'];
@@ -180,11 +215,14 @@ function validateArray<T>(v: unknown, max: number, fn: (item: unknown) => T | nu
 
 function validateWireState(s: unknown): WireState | null {
   if (!isObj(s)) return null;
-  const players = validateArray(s.players, 2, validatePlayer);
+  const players = validateArray(s.players, MAX_PLAYERS, validatePlayer);
   const settings = validateSettings(s.settings);
-  if (!players || players.length !== 2 || !settings) return null;
+  if (!players || players.length < 2 || !settings) return null;
   if (!oneOf(s.phase, ['MEMORIZE', 'DRAWING', 'REVEAL', 'GAME_OVER'] as const)) return null;
-  if (!isInt(s.currentDrawerIndex, 0, 1) || !isInt(s.round, 0, 999)) return null;
+  if (!isInt(s.currentDrawerIndex, 0, players.length - 1) || !isInt(s.round, 0, 999)) return null;
+  if (typeof s.awaitingSolver !== 'boolean') return null;
+  const hint = s.hint === null || s.hint === undefined ? null : validateHint(s.hint);
+  if (s.hint && !hint) return null;
   const currentPokemon = s.currentPokemon === null ? null : validatePokemon(s.currentPokemon);
   if (s.currentPokemon !== null && !currentPokemon) return null;
   const remainingMs = s.remainingMs === null ? null : isNum(s.remainingMs, 0, 120_000) ? s.remainingMs : undefined;
@@ -195,8 +233,9 @@ function validateWireState(s: unknown): WireState | null {
     if (!isObj(r) || !isInt(r.round, 1, 999) || !oneOf(r.outcome, OUTCOMES)) return null;
     const pokemon = validatePokemon(r.pokemon);
     const drawerId = cleanText(r.drawerId, 64);
-    const guesserId = cleanText(r.guesserId, 64);
-    return pokemon && drawerId && guesserId ? { round: r.round, pokemon, outcome: r.outcome, drawerId, guesserId } : null;
+    const solvedBy = r.solvedBy === null ? null : cleanText(r.solvedBy, 64);
+    if (r.solvedBy !== null && !solvedBy) return null;
+    return pokemon && drawerId ? { round: r.round, pokemon, outcome: r.outcome, drawerId, solvedBy } : null;
   });
   const chatMessages = validateArray<ChatMessage>(s.chatMessages, 50, (m) => {
     if (!isObj(m)) return null;
@@ -217,10 +256,12 @@ function validateWireState(s: unknown): WireState | null {
     currentPokemon,
     settings,
     outcome,
+    awaitingSolver: s.awaitingSolver,
     roundResults,
     chatMessages,
     usedPokemonIds: [],
     remainingMs,
+    hint,
   };
 }
 
@@ -247,6 +288,10 @@ export function validateMessage(raw: unknown): Message | null {
     }
     case 'intent':
       return oneOf(raw.intent, INTENTS) ? { t: 'intent', intent: raw.intent } : null;
+    case 'assign': {
+      const playerId = cleanText(raw.playerId, 64);
+      return playerId ? { t: 'assign', playerId } : null;
+    }
     case 'guess': {
       const text = cleanText(raw.text, MAX_GUESS_LENGTH);
       return text ? { t: 'guess', text } : null;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getPokemon, getPokemonPool, isCorrectGuess, normalizeName, pickRandomPokemon, searchPokemonNames } from './pokedex';
+import { getPokemon, getPokemonInfo, getPokemonPool, isCorrectGuess, normalizeName, pickRandomPokemon, searchPokemonNames } from './pokedex';
+import { buildHint, hintStage } from './hints';
 
 describe('names', () => {
   it('uses official display names', () => {
@@ -60,5 +61,42 @@ describe('pools', () => {
     const easy = getPokemonPool('easy');
     const all = easy.slice(0, -1);
     expect(pickRandomPokemon('easy', all).id).toBe(easy[easy.length - 1]);
+  });
+});
+
+describe('filters', () => {
+  it('narrows by generation and type', () => {
+    const kanto = getPokemonPool('hard', { generations: [1], types: [] });
+    expect(kanto).toHaveLength(151);
+    const fireOrWater = getPokemonPool('easy', { generations: [], types: ['fire', 'water'] });
+    expect(fireOrWater.length).toBeGreaterThan(0);
+    expect(fireOrWater.every((id) => getPokemonInfo(id)!.types.some((t) => t === 'fire' || t === 'water'))).toBe(true);
+  });
+
+  it('uses the generation that introduced a form', () => {
+    expect(getPokemonInfo(10100)).toEqual({ generation: 7, types: ['electric', 'psychic'] });
+  });
+
+  it('falls back to the whole difficulty when a filter matches nothing', () => {
+    const none = { generations: [9], types: ['fire'] };
+    expect(getPokemonPool('easy', { generations: [1], types: ['dragon', 'ice'] }).length).toBeGreaterThan(0);
+    const pick = pickRandomPokemon('easy', [], { generations: [], types: [] });
+    expect(pick).toBeTruthy();
+    expect(getPokemonPool('easy', none).every((id) => getPokemonInfo(id)!.generation === 9)).toBe(true);
+  });
+});
+
+describe('hints', () => {
+  const mrMime = getPokemon(122)!;
+  it('unlocks in stages as time runs down', () => {
+    expect(hintStage(60_000, 60_000)).toBe(0);
+    expect(hintStage(30_000, 60_000)).toBe(1);
+    expect(hintStage(15_000, 60_000)).toBe(2);
+  });
+
+  it('shows blanks, then type and generation, then the first letter', () => {
+    expect(buildHint(mrMime, 0)).toEqual({ blanks: ['_', '_', '.', ' ', '_', '_', '_', '_'] });
+    expect(buildHint(mrMime, 1)).toMatchObject({ types: ['psychic', 'fairy'], generation: 1, region: 'Kanto' });
+    expect(buildHint(mrMime, 2).blanks.join('')).toBe('M_. ____');
   });
 });

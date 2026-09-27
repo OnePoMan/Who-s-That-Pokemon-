@@ -42,7 +42,7 @@ describe('wire state', () => {
   it('sends the deadline as time remaining and rebuilds it on the other clock', () => {
     const wire = toWire(state, 'p1', 10_000);
     expect(wire.remainingMs).toBe(60_000);
-    expect(fromWire(wire, 500_000).phaseEndsAt).toBe(560_000);
+    expect(fromWire(wire, 500_000).state.phaseEndsAt).toBe(560_000);
   });
 
   it('round-trips through validation', () => {
