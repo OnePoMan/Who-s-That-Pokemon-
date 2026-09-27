@@ -17,7 +17,7 @@ interface GameSettingsFormProps {
   playerCount: number;
 }
 
-const DIFFICULTY_HINT = {
+export const DIFFICULTY_HINT = {
   easy: 'Popular, well-known Pokémon',
   medium: 'A wider mix across the generations',
   hard: 'Every Pokémon, plus Megas and regional forms',
@@ -25,7 +25,6 @@ const DIFFICULTY_HINT = {
 
 export default function GameSettingsForm({ settings, onChange, playerCount }: GameSettingsFormProps) {
   const set = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => onChange({ ...settings, [key]: value });
-  const toggle = <T,>(list: T[], item: T) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
   const matching = getPokemonPool(settings.difficulty, settings).length;
   const party = playerCount > 2;
 
@@ -41,50 +40,12 @@ export default function GameSettingsForm({ settings, onChange, playerCount }: Ga
           hint={DIFFICULTY_HINT[settings.difficulty]}
         />
 
-        <fieldset className="space-y-1.5">
-          <legend className="settings-legend">Generations</legend>
-          <div className="flex flex-wrap gap-1.5">
-            {GENERATIONS.map((g) => (
-              <button
-                key={g}
-                type="button"
-                aria-pressed={settings.generations.includes(g)}
-                onClick={() => set('generations', toggle(settings.generations, g).sort((a, b) => a - b))}
-                title={REGIONS[g]}
-                className={`pokemon-toggle px-2.5 py-1 text-xs ${settings.generations.includes(g) ? 'active' : ''}`}
-              >
-                {g} · {REGIONS[g]}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset className="space-y-1.5">
-          <legend className="settings-legend">Types</legend>
-          <div className="flex flex-wrap gap-1.5">
-            {TYPES.map((t) => (
-              <TypeBadge
-                key={t}
-                type={t}
-                as="button"
-                selected={settings.types.includes(t)}
-                dimmed={settings.types.length > 0 && !settings.types.includes(t)}
-                onClick={() => set('types', toggle(settings.types, t))}
-              />
-            ))}
-          </div>
-        </fieldset>
-
-        <p className={`text-xs text-center font-body font-semibold ${matching === 0 ? 'text-pokemon-red-dark' : 'text-ink-muted'}`} aria-live="polite">
-          {matching === 0
-            ? 'No Pokémon match these filters — any Pokémon from this difficulty will be used.'
-            : `${matching} Pokémon match${settings.generations.length || settings.types.length ? '' : ' (no filters)'}`}
-          {(settings.generations.length > 0 || settings.types.length > 0) && (
-            <button type="button" onClick={() => onChange({ ...settings, generations: [], types: [] })} className="ml-2 underline">
-              Clear filters
-            </button>
-          )}
-        </p>
+        <PoolFilterFields
+          generations={settings.generations}
+          types={settings.types}
+          matching={matching}
+          onChange={(patch) => onChange({ ...settings, ...patch })}
+        />
 
         <OptionRow label="Drawing time" options={TIMER_OPTIONS} value={settings.timerDuration} format={(t) => `${t}s`} onChange={(v) => set('timerDuration', v)} />
         <OptionRow label="Memorize time" options={MEMORIZE_OPTIONS} value={settings.memorizeSeconds} format={(t) => `${t}s`} onChange={(v) => set('memorizeSeconds', v)} />
@@ -120,7 +81,7 @@ export default function GameSettingsForm({ settings, onChange, playerCount }: Ga
   );
 }
 
-function OptionRow<T extends string | number | boolean>({
+export function OptionRow<T extends string | number | boolean>({
   label,
   options,
   value,
@@ -153,5 +114,69 @@ function OptionRow<T extends string | number | boolean>({
       </div>
       {hint && <p className="text-[11px] text-ink-muted text-center font-body">{hint}</p>}
     </fieldset>
+  );
+}
+
+const toggle = <T,>(list: T[], item: T) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
+
+/** Generation and type chips, with a live count of the Pokémon they leave. */
+export function PoolFilterFields({
+  generations,
+  types,
+  matching,
+  onChange,
+}: {
+  generations: number[];
+  types: string[];
+  matching: number;
+  onChange: (patch: { generations?: number[]; types?: string[] }) => void;
+}) {
+  return (
+    <>
+      <fieldset className="space-y-1.5">
+        <legend className="settings-legend">Generations</legend>
+        <div className="flex flex-wrap gap-1.5">
+          {GENERATIONS.map((g) => (
+            <button
+              key={g}
+              type="button"
+              aria-pressed={generations.includes(g)}
+              onClick={() => onChange({ generations: toggle(generations, g).sort((a, b) => a - b) })}
+              title={REGIONS[g]}
+              className={`pokemon-toggle px-2.5 py-1 text-xs ${generations.includes(g) ? 'active' : ''}`}
+            >
+              {g} · {REGIONS[g]}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="space-y-1.5">
+        <legend className="settings-legend">Types</legend>
+        <div className="flex flex-wrap gap-1.5">
+          {TYPES.map((t) => (
+            <TypeBadge
+              key={t}
+              type={t}
+              as="button"
+              selected={types.includes(t)}
+              dimmed={types.length > 0 && !types.includes(t)}
+              onClick={() => onChange({ types: toggle(types, t) })}
+            />
+          ))}
+        </div>
+      </fieldset>
+
+      <p className={`text-xs text-center font-body font-semibold ${matching === 0 ? 'text-pokemon-red-dark' : 'text-ink-muted'}`} aria-live="polite">
+        {matching === 0
+          ? 'No Pokémon match these filters — any Pokémon from this difficulty will be used.'
+          : `${matching} Pokémon match${generations.length || types.length ? '' : ' (no filters)'}`}
+        {(generations.length > 0 || types.length > 0) && (
+          <button type="button" onClick={() => onChange({ generations: [], types: [] })} className="ml-2 underline">
+            Clear filters
+          </button>
+        )}
+      </p>
+    </>
   );
 }

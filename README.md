@@ -10,6 +10,12 @@ A drawing and guessing game for 2–8 players. One player gets a few seconds to 
 
 **TV / big screen.** Open the site on a laptop or smart-TV browser, enter the room code and choose *Watch on this screen*. It shows the live drawing, timer, hints, guesses, reactions, reveal and scores for everyone in the room, and never receives the answer early. Up to 4 screens can watch.
 
+**Daily challenge.** One Pokémon a day, the same for everyone: 10 seconds to memorize it, 90 seconds to draw it from memory, one try. Share a spoiler-free card of your drawing to see if friends can guess it, and keep your daily streak going.
+
+**Solo practice.** Pick a difficulty and filters, then draw at your own pace with no timer and compare with the official artwork.
+
+**Pokédex, stats and badges.** Every drawing made or watched on the phone — in games, the daily and solo practice — is saved to its Pokédex (all 1,175 Pokémon and forms, filterable by generation and type), where you can see, save, share or delete each one. The Stats tab tracks games, rounds guessed, streaks, most-drawn Pokémon and more, and there are 17 badges to earn.
+
 After each round the answer is revealed as a silhouette below the drawing, with a timelapse replay and a share card. Every drawing from the session is in the gallery (settings menu, or at the end of the game) to download or share.
 
 **Scoring.** With two players, the guesser scores a point for a correct guess and the first to 3/5/7 points wins. With three or more, the first player to guess and the drawer each score a point (on a shared phone you tap who got it), everyone draws the same number of times (1–3 turns each), and the highest score wins; ties share the win.
@@ -55,22 +61,22 @@ NEXT_PUBLIC_PEER_SECURE=true
 
 The page's Content-Security-Policy follows these settings automatically.
 
-**Privacy.** There are no accounts, analytics or server-side storage; drawings stay on the players' phones. Two-phone play does expose network details the way any peer-to-peer game does: the PeerJS server and Google's STUN server see each player's IP address and the room code, and the two players' phones learn each other's IP address. Game data travels encrypted (WebRTC DTLS), including when it passes through the relay. Only share room codes with people you know. Self-hosting the PeerJS server (and a TURN server) removes the third parties.
+**Privacy.** There are no accounts, analytics or server-side storage; drawings, stats and the Pokédex stay on the players' phones (browser storage), and can be deleted from the Pokédex's Stats tab. Two-phone play does expose network details the way any peer-to-peer game does: the PeerJS server and Google's STUN server see each player's IP address and the room code, and the two players' phones learn each other's IP address. Game data travels encrypted (WebRTC DTLS), including when it passes through the relay. Only share room codes with people you know. Self-hosting the PeerJS server (and a TURN server) removes the third parties.
 
 ### Security
 
 - Everything received from the other phone is validated (`src/lib/net/protocol.ts`) and rate limited; the host decides every outcome, so a modified client can't score for itself or see the answer early. Guesses are limited to about one per second and 30 per round.
 - Drawings are capped (60 fills, 1,000 operations, 20,000 points) and undo/redo/fill are paced, so a hostile peer can't freeze the other phone.
-- Rooms accept one guest; unidentified connections are dropped after 5 seconds; a rejoining guest checks it is talking to the same host.
+- Rooms hold up to 8 players and 4 watching screens; unidentified connections are dropped after 5 seconds; a rejoining guest checks it is talking to the same host.
 - Content-Security-Policy and other security headers are set in `next.config.ts`.
 
 ## Project layout
 
 ```
 src/app/            layout, manifest, icons, global styles
-src/components/     screens (Lobby, RemoteLobby, MemorizePhase, DrawingPhase, RevealPhase, …)
-src/hooks/          useRoom (PeerJS), useSound (Web Audio), usePrefs, device helpers
-src/lib/            game-state (reducer), canvas-engine, pokedex, net/protocol, share, prefs
+src/components/     screens (Lobby, RemoteLobby, MemorizePhase, DrawingPhase, RevealPhase, SoloPlay, PokedexScreen, …)
+src/hooks/          useRoom (PeerJS), useSound (Web Audio), usePrefs, useProgress, device helpers
+src/lib/            game-state (reducer), canvas-engine, pokedex, hints, daily, stats, collection (IndexedDB), net/protocol, share, prefs
 public/sw.js        offline service worker
 scripts/            data and icon generators
 ```

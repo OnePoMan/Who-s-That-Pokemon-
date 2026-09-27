@@ -98,3 +98,46 @@ export async function shareOrDownload(blob: Blob, filename: string, text: string
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
   return 'downloaded';
 }
+
+/** A spoiler-free square card with just the drawing, for the daily challenge. */
+export async function composeDailyCard(drawingUrl: string, title: string, footer: string): Promise<Blob> {
+  const S = 1080;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#DC0A2D';
+  ctx.fillRect(0, 0, S, S);
+  ctx.fillStyle = '#FFF8E7';
+  ctx.beginPath();
+  ctx.roundRect(24, 24, S - 48, S - 48, 28);
+  ctx.fill();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#2B2B2B';
+  ctx.font = 'bold 48px system-ui, sans-serif';
+  ctx.fillText(title, S / 2, 104);
+  ctx.font = '600 30px system-ui, sans-serif';
+  ctx.fillStyle = '#6b6b6b';
+  ctx.fillText('Can you guess who I drew?', S / 2, 150);
+
+  const box = 740;
+  const x = (S - box) / 2;
+  const top = 190;
+  const drawing = await loadImage(drawingUrl);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(x, top, box, box);
+  ctx.drawImage(drawing, x, top, box, box);
+  ctx.strokeStyle = '#2B2B2B';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(x, top, box, box);
+
+  ctx.fillStyle = '#2B2B2B';
+  ctx.font = '600 32px system-ui, sans-serif';
+  ctx.fillText(footer, S / 2, top + box + 70);
+
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not create image'))), 'image/png'),
+  );
+}

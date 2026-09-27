@@ -10,6 +10,12 @@ import { MAX_NAME_LENGTH } from '@/lib/net/protocol';
 interface LobbyProps {
   onStartLocal: (players: Player[], settings: GameSettings) => void;
   onRemote: () => void;
+  onDaily: () => void;
+  onSolo: () => void;
+  onPokedex: () => void;
+  /** Empty until the date is known on the client. */
+  daily: { number: number; done: boolean; streak: number } | '';
+  discovered: number;
 }
 
 interface Draft {
@@ -20,7 +26,7 @@ interface Draft {
 
 let nextKey = 3;
 
-export default function Lobby({ onStartLocal, onRemote }: LobbyProps) {
+export default function Lobby({ onStartLocal, onRemote, onDaily, onSolo, onPokedex, daily, discovered }: LobbyProps) {
   const [step, setStep] = useState<'mode' | 'players' | 'settings'>('mode');
   const [drafts, setDrafts] = useState<Draft[]>([
     { key: 1, name: '', avatarId: 1 },
@@ -59,6 +65,17 @@ export default function Lobby({ onStartLocal, onRemote }: LobbyProps) {
             Play on several phones
           </PokeBallButton>
           <p className="text-center text-xs text-ink-muted font-body -mt-2">Share a room code and play anywhere</p>
+          <nav aria-label="On your own" className="grid grid-cols-3 gap-2 pt-1">
+            <HomeTile
+              icon="📅"
+              label={daily ? `Daily #${daily.number}` : 'Daily'}
+              detail={!daily ? 'Challenge' : daily.done ? 'Done ✓' : daily.streak > 0 ? `🔥 ${daily.streak} days` : 'New today'}
+              highlight={!!daily && !daily.done}
+              onClick={onDaily}
+            />
+            <HomeTile icon="✏️" label="Solo practice" detail="No timer" onClick={onSolo} />
+            <HomeTile icon="📖" label="Pokédex" detail={`${discovered} drawn`} onClick={onPokedex} />
+          </nav>
         </div>
       )}
 
@@ -150,6 +167,23 @@ export default function Lobby({ onStartLocal, onRemote }: LobbyProps) {
         </div>
       )}
     </div>
+  );
+}
+
+function HomeTile({ icon, label, detail, highlight = false, onClick }: { icon: string; label: string; detail: string; highlight?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative flex flex-col items-center gap-0.5 rounded-xl border-2 bg-surface px-1 py-2 font-body hover:bg-surface-2 active:scale-95 transition ${highlight ? 'border-pokemon-red' : 'border-line'}`}
+    >
+      {highlight && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-pokemon-red" aria-hidden />}
+      <span className="text-2xl" aria-hidden>
+        {icon}
+      </span>
+      <span className="text-xs font-bold text-ink leading-tight text-center">{label}</span>
+      <span className="text-[10px] text-ink-muted">{detail}</span>
+    </button>
   );
 }
 

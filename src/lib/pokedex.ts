@@ -130,3 +130,26 @@ export function searchPokemonNames(query: string, limit = 8): string[] {
   }
   return [...starts, ...wordStarts].slice(0, limit);
 }
+
+export interface DexEntryInfo {
+  id: number;
+  name: string;
+  /** National Dex number; alternate forms share their species' number. */
+  number: number;
+  generation: number;
+  types: string[];
+}
+
+/** Every Pokémon and form in National Dex order, each form right after its species. */
+export const DEX_ORDER: readonly DexEntryInfo[] = (() => {
+  const formsBySpecies = new Map<number, FormRow[]>();
+  for (const f of forms) formsBySpecies.set(f[2], [...(formsBySpecies.get(f[2]) ?? []), f]);
+  const out: DexEntryInfo[] = [];
+  for (const [id, name, generation, types] of [...species].sort((a, b) => a[0] - b[0])) {
+    out.push({ id, name, number: id, generation, types });
+    for (const [fid, fname, , fgen, ftypes] of formsBySpecies.get(id) ?? []) {
+      out.push({ id: fid, name: fname, number: id, generation: fgen, types: ftypes });
+    }
+  }
+  return out;
+})();

@@ -13,7 +13,10 @@ import ConfirmDialog from './ConfirmDialog';
 import PokeBallButton from './PokeBallButton';
 import TVView from './TVView';
 import Reactions, { ReactionBar, type FloatingReaction } from './Reactions';
+import SoloPlay from './SoloPlay';
+import PokedexScreen from './PokedexScreen';
 import { usePrefs } from '@/hooks/usePrefs';
+import { useProgress } from '@/hooks/useProgress';
 import { useSound } from '@/hooks/useSound';
 import { useRoom, type HelloMessage } from '@/hooks/useRoom';
 import { useNow, useWakeLock } from '@/hooks/useDeviceHelpers';
@@ -21,6 +24,9 @@ import { vibrate } from '@/lib/prefs';
 import { isCorrectGuess, pickRandomPokemon } from '@/lib/pokedex';
 import { buildHint, hintStage, type Hint } from '@/lib/hints';
 import { composeComparison, safeFilename, shareOrDownload } from '@/lib/share';
+import { addDrawing } from '@/lib/collection';
+import { currentDailyStreak, recordGame, recordRound, type Achievement } from '@/lib/stats';
+import { dailyNumber, dateKey } from '@/lib/daily';
 import {
   MAX_SPECTATORS,
   SPECTATOR_ID,
@@ -67,7 +73,11 @@ export default function Game() {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const [prefs, updatePrefs] = usePrefs();
   const sound = useSound(prefs);
-  const [screen, setScreen] = useState<'lobby' | 'remote'>('lobby');
+  const [screen, setScreen] = useState<'lobby' | 'remote' | 'solo' | 'daily' | 'dex'>('lobby');
+  // Today's date for the daily challenge: read on the client only, and again on return to the app.
+  const [today, setToday] = useState('');
+  const [badgeQueue, setBadgeQueue] = useState<Achievement[]>([]);
+  const progress = useProgress(useCallback((a: Achievement) => setBadgeQueue((q) => [...q, a]), []));
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [lobbyPlayers, setLobbyPlayers] = useState<Player[]>([]);
   const [spectatorCount, setSpectatorCount] = useState(0);
@@ -115,7 +125,7 @@ export default function Game() {
 
   const ticking = state.phase === 'MEMORIZE' || state.phase === 'DRAWING';
   const now = useNow(ticking);
-  useWakeLock(state.phase !== 'LOBBY' && state.phase !== 'GAME_OVER');
+  useWakeLock((state.phase !== 'LOBBY' && state.phase !== 'GAME_OVER') || screen === 'solo' || screen === 'daily');
 
   // An invite link (?room=CODE) opens the join screen with the code filled in.
   useEffect(() => {
@@ -126,6 +136,13 @@ export default function Game() {
     setScreen('remote');
     window.history.replaceState(null, '', window.location.pathname);
   }, []);
+
+  useEffect(() => {
+    const refresh = () => setToday(dateKey());
+    refresh();
+    document.addEventListener('visibilitychange', refresh);
+    return () => document.removeEventListener('visibilitychange', refresh);
+  }, [screen]);
 
   const showReaction = useCallback((from: string, emoji: Reaction) => {
     const name = stateRef.current.players.find((p) => p.id === from)?.nickname ?? lobbyRef.current.find((p) => p.id === from)?.nickname ?? '';
@@ -139,7 +156,10 @@ export default function Game() {
   const captureDrawing = useCallback((round: number) => {
     const manager = canvasRef.current;
     if (!manager) return;
-    const saved: SavedDrawing = { dataUrl: manager.toDataURL(), timeline: manager.getTimeline() };
+    const s = stateRef.current;
+    const leftFraction =
+      s.phase === 'DRAWING' && s.phaseEndsAt !== null ? Math.max(0, s.phaseEndsAt - Date.now()) / (s.settings.timerDuration * 1000) : 0;
+    const saved: SavedDrawing = { dataUrl: manager.toDataURL(), timeline: manager.getTimeline(), leftFraction };
     setDrawings((prev) => ({ ...prev, [round]: saved }));
   }, []);
 
@@ -561,6 +581,56 @@ export default function Game() {
     else if (state.phase === 'MEMORIZE' || state.phase === 'DRAWING') sound.play('whoosh');
   }, [state.phase, state.outcome, sound, prefs.haptics]);
 
+  // ---- Pokédex and stats -------------------------------------------------------------------------
+
+  // Every finished round's drawing goes into this device's Pokédex (once the guesser is known).
+  const savedDrawingsRef = useRef(new WeakSet<SavedDrawing>());
+  const { update: updateProgress } = progress;
+  useEffect(() => {
+    if (state.phase !== 'REVEAL' || state.awaitingSolver || !state.currentPokemon || !state.outcome) return;
+    if (state.mode === 'remote' && myId === SPECTATOR_ID) return;
+    const drawing = drawings[state.round];
+    if (!drawing || savedDrawingsRef.current.has(drawing)) return;
+    savedDrawingsRef.current.add(drawing);
+    const pokemon = state.currentPokemon;
+    const outcome = state.outcome;
+    void addDrawing(
+      {
+        pokemonId: pokemon.id,
+        pokemonName: pokemon.name,
+        artist: getDrawer(state)?.nickname ?? 'Someone',
+        source: state.mode === 'remote' ? 'multi-phone' : 'one-phone',
+        outcome,
+        drawnAt: Date.now(),
+      },
+      drawing.dataUrl,
+    );
+    const streak = Math.max(0, ...state.players.map((p) => guessStreak(state, p.id)));
+    updateProgress((st) => recordRound(st, { pokemonId: pokemon.id, outcome, quick: (drawing.leftFraction ?? 0) >= 2 / 3, streak }));
+  }, [state, drawings, myId, updateProgress]);
+
+  const recordedGameRef = useRef(false);
+  useEffect(() => {
+    if (state.phase !== 'GAME_OVER') {
+      recordedGameRef.current = false;
+      return;
+    }
+    if (recordedGameRef.current || (state.mode === 'remote' && myId === SPECTATOR_ID)) return;
+    recordedGameRef.current = true;
+    const online = state.mode === 'remote';
+    const won = online && getWinners(state).some((p) => p.id === myId);
+    updateProgress((st) => recordGame(st, { players: state.players.length, online, won }));
+  }, [state, myId, updateProgress]);
+
+  const shownBadge = badgeQueue[0] ?? null;
+  useEffect(() => {
+    if (!shownBadge) return;
+    sound.play('correct');
+    const id = setTimeout(() => setBadgeQueue((q) => q.slice(1)), 3200);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownBadge]);
+
   // ---- Starting and leaving ----------------------------------------------------------------------
 
   const startLocal = (players: Player[], settings: GameSettings) => {
@@ -619,6 +689,11 @@ export default function Game() {
     setHostMismatch(false);
     setNotice('Disconnected: the room was taken over by a different host.');
   }, [hostMismatch, goHome]);
+
+  const openSolo = (which: 'solo' | 'daily') => {
+    sound.startBgm();
+    setScreen(which);
+  };
 
   const requestHome = () => {
     if (state.phase === 'LOBBY' || state.phase === 'GAME_OVER') goHome();
@@ -703,7 +778,7 @@ export default function Game() {
           drawingCount={Object.keys(drawings).length}
           onOpenGallery={() => setGalleryOpen(true)}
           onGoHome={requestHome}
-          showHome={state.phase !== 'LOBBY' || screen === 'remote'}
+          showHome={state.phase !== 'LOBBY' || screen !== 'lobby'}
         />
       </header>
 
@@ -714,7 +789,39 @@ export default function Game() {
       )}
 
       <main className="flex-1 flex flex-col items-center justify-center p-3 sm:p-4 w-full">
-        {state.phase === 'LOBBY' && screen === 'lobby' && <Lobby onStartLocal={startLocal} onRemote={() => setScreen('remote')} />}
+        {state.phase === 'LOBBY' && screen === 'lobby' && (
+          <Lobby
+            onStartLocal={startLocal}
+            onRemote={() => setScreen('remote')}
+            onDaily={() => openSolo('daily')}
+            onSolo={() => openSolo('solo')}
+            onPokedex={() => setScreen('dex')}
+            daily={
+              today && {
+                number: dailyNumber(today),
+                done: progress.stats.daily.result?.date === today,
+                streak: currentDailyStreak(progress.stats, today),
+              }
+            }
+            discovered={progress.stats.discovered.length}
+          />
+        )}
+
+        {state.phase === 'LOBBY' && (screen === 'solo' || screen === 'daily') && (
+          <SoloPlay
+            key={screen}
+            kind={screen}
+            stats={progress.stats}
+            updateStats={updateProgress}
+            play={sound.play}
+            onNotice={setNotice}
+            onExit={goHome}
+          />
+        )}
+
+        {state.phase === 'LOBBY' && screen === 'dex' && (
+          <PokedexScreen stats={progress.stats} onResetStats={progress.reset} onNotice={setNotice} onExit={goHome} />
+        )}
 
         {state.phase === 'LOBBY' && screen === 'remote' && (
           <RemoteLobby
@@ -800,7 +907,7 @@ export default function Game() {
       </main>
 
       {/* Hidden mid-round so the canvas and buttons fit on small phones. */}
-      {state.phase !== 'MEMORIZE' && state.phase !== 'DRAWING' && (
+      {state.phase !== 'MEMORIZE' && state.phase !== 'DRAWING' && screen !== 'solo' && screen !== 'daily' && (
         <footer className="text-center py-1.5 text-[10px] font-body text-ink-muted border-t border-line/15">
           Unofficial fan project · Pokémon data from PokéAPI · Not affiliated with Nintendo or The Pokémon Company
         </footer>
@@ -852,6 +959,18 @@ export default function Game() {
               </PokeBallButton>
             </div>
           </div>
+        </div>
+      )}
+
+      {shownBadge && (
+        <div role="status" className="fixed top-16 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-2 bg-pokemon-cream border-4 border-pokemon-yellow-dark text-ink font-body px-4 py-2 rounded-2xl shadow-xl animate-bounce-in">
+          <span className="text-2xl" aria-hidden>
+            {shownBadge.icon}
+          </span>
+          <span>
+            <span className="block text-[10px] font-bold uppercase tracking-widest text-ink-muted">Badge earned</span>
+            <span className="block text-sm font-bold">{shownBadge.title}</span>
+          </span>
         </div>
       )}
 

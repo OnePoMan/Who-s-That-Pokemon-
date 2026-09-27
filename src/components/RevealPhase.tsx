@@ -11,6 +11,8 @@ import PokeBallButton from './PokeBallButton';
 export interface SavedDrawing {
   dataUrl: string;
   timeline: DrawEvent[];
+  /** Share of the drawing time still left when the round ended (0..1). */
+  leftFraction?: number;
 }
 
 interface RevealPhaseProps {
