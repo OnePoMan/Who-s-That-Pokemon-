@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import DrawingCanvas from './DrawingCanvas';
 import PokemonSilhouette from './PokemonSilhouette';
+import RevealStage from './RevealStage';
 import PokeBallButton from './PokeBallButton';
 import Timer from './Timer';
 import { DIFFICULTY_HINT, OptionRow, PoolFilterFields } from './GameSettingsForm';
@@ -29,6 +30,7 @@ interface SoloPlayProps {
   stats: Stats;
   updateStats: (fn: (s: Stats) => Stats) => void;
   play: (sound: SoundName) => void;
+  playCry: (pokemonId: number) => void;
   onNotice: (text: string) => void;
   onExit: () => void;
 }
@@ -47,7 +49,7 @@ const RECENT_LIMIT = 30;
  * Drawing on your own: untimed solo practice, or the daily challenge (a short memorize, then a
  * timed drawing from memory, once per day). Every finished drawing goes into the Pokédex.
  */
-export default function SoloPlay({ kind, stats, updateStats, play, onNotice, onExit }: SoloPlayProps) {
+export default function SoloPlay({ kind, stats, updateStats, play, playCry, onNotice, onExit }: SoloPlayProps) {
   const daily = kind === 'daily';
   const today = useState(() => dateKey())[0];
   const doneToday = daily && stats.daily.result?.date === today;
@@ -95,6 +97,7 @@ export default function SoloPlay({ kind, stats, updateStats, play, onNotice, onE
     setStage('reveal');
     setEndsAt(null);
     play('whosthat');
+    setTimeout(() => playCry(pokemon.id), 1500); // as the artwork is revealed
     const drawingId = await addDrawing(
       { pokemonId: pokemon.id, pokemonName: pokemon.name, artist: 'You', source: kind, outcome: 'done', drawnAt: Date.now() },
       imageUrl,
@@ -184,9 +187,9 @@ export default function SoloPlay({ kind, stats, updateStats, play, onNotice, onE
     return (
       <Screen title="Memorize this Pokémon!">
         <PokemonSilhouette imageUrl={pokemon.artworkUrl} revealed name={pokemon.name} className="w-[min(60vw,240px)]" />
-        <p className="font-pixel text-base text-pokemon-blue text-center leading-relaxed">{pokemon.name}</p>
+        <p className="font-pixel text-base text-accent text-center leading-relaxed">{pokemon.name}</p>
         {daily && remainingMs !== null && (
-          <p className="font-pixel text-2xl text-pokemon-red" role="timer" aria-label={`${secondsLeft} seconds to memorize`}>
+          <p className="font-pixel text-2xl text-accent-red" role="timer" aria-label={`${secondsLeft} seconds to memorize`}>
             {secondsLeft}
           </p>
         )}
@@ -285,12 +288,12 @@ export function Comparison({ drawingUrl, pokemon, animate = false }: { drawingUr
   const box = 'w-full aspect-square';
   return (
     <div className="w-full space-y-2">
-      <p className="font-pixel text-sm text-center text-pokemon-dark leading-relaxed h-6" aria-live="polite">
+      <p className="font-pixel text-sm text-center text-ink leading-relaxed h-6" aria-live="polite">
         {revealed ? `It's ${pokemon.name}!` : "Who's that Pokémon?"}
       </p>
       <div className="grid grid-cols-2 gap-3">
         <figure className="space-y-1">
-          <div className={`${box} rounded-lg overflow-hidden border-4 border-pokemon-dark bg-white`}>
+          <div className={`${box} rounded-lg overflow-hidden border-4 border-line bg-white`}>
             {drawingUrl && (
               // eslint-disable-next-line @next/next/no-img-element -- local image
               <img src={drawingUrl} alt="Your drawing" className="w-full h-full object-contain" draggable={false} />
@@ -299,7 +302,7 @@ export function Comparison({ drawingUrl, pokemon, animate = false }: { drawingUr
           <figcaption className="text-[10px] font-bold text-ink-muted uppercase tracking-widest text-center">Yours</figcaption>
         </figure>
         <figure className="space-y-1">
-          <PokemonSilhouette imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
+          <RevealStage imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
           <figcaption className="text-[10px] font-bold text-ink-muted uppercase tracking-widest text-center">Official</figcaption>
         </figure>
       </div>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { FULL_BASS, FULL_MELODY, NOTE_FREQS, totalDuration, type MelodyNote } from '@/lib/audio/song';
 import type { Prefs } from '@/lib/prefs';
+import { cryUrl, speciesOf } from '@/lib/pokedex';
 
 export type SoundName = 'correct' | 'wrong' | 'tick' | 'gameOver' | 'click' | 'whoosh' | 'reveal' | 'whosthat';
 
@@ -10,6 +11,7 @@ const BGM_LEVEL = 0.2; // headroom so full music volume still sits under the sou
 const LOOKAHEAD_S = 2; // how far ahead notes are scheduled
 const SCHEDULER_TICK_MS = 250;
 const CROSSFADE_S = 2.5; // each loop overlaps the next by this much, fading out as it fades in
+const CRY_LEVEL = 0.6; // cries are recorded loud
 
 interface ScheduledNote {
   time: number; // seconds from the start of the loop
@@ -53,6 +55,7 @@ export function useSound(prefs: Prefs) {
   const schedulerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wantBgmRef = useRef(false);
   const prefsRef = useRef(prefs);
+  const cryRef = useRef<HTMLAudioElement | null>(null);
 
   const getCtx = useCallback((): AudioContext | null => {
     if (!ctxRef.current) {
@@ -166,6 +169,25 @@ export function useSound(prefs: Prefs) {
     [applyVolumes, getCtx, tone],
   );
 
+  /** The Pokémon's own cry (streamed from the PokeAPI cries repository). */
+  const playCry = useCallback((id: number) => {
+    const p = prefsRef.current;
+    if (!p.sfxEnabled || !p.cries || typeof Audio === 'undefined') return;
+    cryRef.current?.pause();
+    const start = (cryId: number, fallback: number | null) => {
+      const audio = new Audio(cryUrl(cryId));
+      audio.volume = Math.min(1, p.sfxVolume * CRY_LEVEL);
+      // A form without its own recording uses its species' cry.
+      audio.onerror = () => {
+        if (fallback !== null && cryRef.current === audio) start(fallback, null);
+      };
+      cryRef.current = audio;
+      void audio.play().catch(() => {});
+    };
+    const species = speciesOf(id);
+    start(id, species !== id ? species : null);
+  }, []);
+
   // ---- Background music ------------------------------------------------------------------------
 
   const stopScheduler = useCallback(() => {
@@ -275,5 +297,5 @@ export function useSound(prefs: Prefs) {
     [],
   );
 
-  return useMemo(() => ({ play, startBgm, stopBgm }), [play, startBgm, stopBgm]);
+  return useMemo(() => ({ play, playCry, startBgm, stopBgm }), [play, playCry, startBgm, stopBgm]);
 }

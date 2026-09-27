@@ -167,7 +167,7 @@ export function PoolFilterFields({
         </div>
       </fieldset>
 
-      <p className={`text-xs text-center font-body font-semibold ${matching === 0 ? 'text-pokemon-red-dark' : 'text-ink-muted'}`} aria-live="polite">
+      <p className={`text-xs text-center font-body font-semibold ${matching === 0 ? 'text-accent-red' : 'text-ink-muted'}`} aria-live="polite">
         {matching === 0
           ? 'No Pokémon match these filters — any Pokémon from this difficulty will be used.'
           : `${matching} Pokémon match${generations.length || types.length ? '' : ' (no filters)'}`}

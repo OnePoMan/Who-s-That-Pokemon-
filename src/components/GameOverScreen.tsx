@@ -52,7 +52,7 @@ export default function GameOverScreen({ winners, players, roundResults, onRemat
               </span>
               <AvatarIcon avatarId={player.avatarId} size="md" />
               <span className={`flex-1 font-bold ${winnerIds.has(player.id) ? 'text-yellow-900' : 'text-ink'}`}>{player.nickname}</span>
-              <span className={`text-2xl font-black ${winnerIds.has(player.id) ? 'text-yellow-900' : 'text-pokemon-blue'}`}>{player.score}</span>
+              <span className={`text-2xl font-black ${winnerIds.has(player.id) ? 'text-yellow-900' : 'text-accent'}`}>{player.score}</span>
             </li>
           );
         })}

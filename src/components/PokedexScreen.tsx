@@ -297,8 +297,8 @@ function DexDetail({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 animate-fade-in" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-labelledby="dex-detail-title" className="bg-pokemon-cream rounded-2xl shadow-2xl border-4 border-pokemon-dark w-full max-w-lg max-h-[85dvh] flex flex-col">
-        <div className="flex items-center justify-between p-3 border-b-2 border-pokemon-dark bg-gradient-to-r from-pokemon-red to-pokemon-red-dark rounded-t-xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="dex-detail-title" className="bg-screen rounded-2xl shadow-2xl border-4 border-line w-full max-w-lg max-h-[85dvh] flex flex-col">
+        <div className="flex items-center justify-between p-3 border-b-2 border-line bg-gradient-to-r from-pokemon-red to-pokemon-red-dark rounded-t-xl">
           <h2 id="dex-detail-title" className="font-pixel text-[11px] text-white leading-relaxed">
             #{String(entry.number).padStart(4, '0')} {entry.name}
           </h2>
@@ -335,7 +335,7 @@ function DexDetail({
                     {OUTCOME_LABEL[d.outcome] && ` · ${OUTCOME_LABEL[d.outcome]}`}
                   </p>
                   <div className="flex gap-1">
-                    <button type="button" onClick={() => void withImage(d, (url) => downloadUrl(url, filename(d)))} className="flex-1 py-1 rounded-lg text-[10px] font-bold text-pokemon-blue bg-blue-50 hover:bg-blue-100 border border-pokemon-blue/20">
+                    <button type="button" onClick={() => void withImage(d, (url) => downloadUrl(url, filename(d)))} className="flex-1 py-1 rounded-lg text-[10px] font-bold text-accent bg-blue-50 hover:bg-blue-100 border border-pokemon-blue/20">
                       Save
                     </button>
                     <button
@@ -350,7 +350,7 @@ function DexDetail({
                           }
                         })
                       }
-                      className="flex-1 py-1 rounded-lg text-[10px] font-bold text-pokemon-red bg-red-50 hover:bg-red-100 border border-pokemon-red/20"
+                      className="flex-1 py-1 rounded-lg text-[10px] font-bold text-accent-red bg-red-50 hover:bg-red-100 border border-pokemon-red/20"
                     >
                       Share
                     </button>
@@ -411,7 +411,7 @@ function StatsView({ stats, drawingCount, onReset }: { stats: Stats; drawingCoun
         {tiles.map(([label, value]) => (
           <li key={label} className="pokemon-card">
             <div className="pokemon-card-body text-center py-2">
-              <p className="font-pixel text-sm text-pokemon-blue">{value}</p>
+              <p className="font-pixel text-sm text-accent">{value}</p>
               <p className="text-[11px] font-body font-bold text-ink-muted mt-1">{label}</p>
             </div>
           </li>
@@ -432,7 +432,7 @@ function StatsView({ stats, drawingCount, onReset }: { stats: Stats; drawingCoun
         </div>
       )}
       <p className="text-[11px] text-center font-body text-ink-muted">Everything here is stored only on this device.</p>
-      <button type="button" onClick={() => setConfirm(true)} className="w-full text-sm font-body font-bold text-pokemon-red-dark underline">
+      <button type="button" onClick={() => setConfirm(true)} className="w-full text-sm font-body font-bold text-accent-red underline">
         Delete all drawings and progress
       </button>
       {confirm && (

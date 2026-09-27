@@ -15,6 +15,7 @@ import TVView from './TVView';
 import Reactions, { ReactionBar, type FloatingReaction } from './Reactions';
 import SoloPlay from './SoloPlay';
 import PokedexScreen from './PokedexScreen';
+import HowToPlay, { hasSeenGuide } from './HowToPlay';
 import { usePrefs } from '@/hooks/usePrefs';
 import { useProgress } from '@/hooks/useProgress';
 import { useSound } from '@/hooks/useSound';
@@ -85,6 +86,7 @@ export default function Game() {
   const [drawings, setDrawings] = useState<Record<number, SavedDrawing>>({});
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [confirmHome, setConfirmHome] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   // Hints a guest receives from the host (the guest never has the answer to build them).
   const [remoteHint, setRemoteHint] = useState<Hint | null>(null);
@@ -131,11 +133,28 @@ export default function Game() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = normalizeRoomCode(params.get('room') ?? '');
-    if (!code) return;
+    if (!code) {
+      // First visit: show how to play (not for someone arriving from an invite mid-setup).
+      if (!hasSeenGuide()) setGuideOpen(true);
+      return;
+    }
     setInviteCode(code);
     setScreen('remote');
     window.history.replaceState(null, '', window.location.pathname);
   }, []);
+
+  // Settings can override the device's light/dark preference. The first run sees the default
+  // prefs (stored ones load a moment later), so it leaves the theme the layout script applied.
+  const themeReadyRef = useRef(false);
+  useEffect(() => {
+    if (!themeReadyRef.current) {
+      themeReadyRef.current = true;
+      return;
+    }
+    const root = document.documentElement;
+    if (prefs.theme === 'system') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', prefs.theme);
+  }, [prefs.theme]);
 
   useEffect(() => {
     const refresh = () => setToday(dateKey());
@@ -574,11 +593,18 @@ export default function Game() {
         vibrate([40, 40, 80], prefs.haptics);
       } else if (state.outcome === 'timeout') sound.play('wrong');
       else sound.play('whoosh');
-      const id = setTimeout(() => sound.play('whosthat'), 500);
-      return () => clearTimeout(id);
+      const sting = setTimeout(() => sound.play('whosthat'), 500);
+      // The cry plays as the silhouette turns into the Pokémon.
+      const pokemonId = state.currentPokemon?.id;
+      const cry = setTimeout(() => pokemonId && sound.playCry(pokemonId), 2000);
+      return () => {
+        clearTimeout(sting);
+        clearTimeout(cry);
+      };
     }
     if (state.phase === 'GAME_OVER') sound.play('gameOver');
     else if (state.phase === 'MEMORIZE' || state.phase === 'DRAWING') sound.play('whoosh');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on phase changes
   }, [state.phase, state.outcome, sound, prefs.haptics]);
 
   // ---- Pokédex and stats -------------------------------------------------------------------------
@@ -779,6 +805,7 @@ export default function Game() {
           onOpenGallery={() => setGalleryOpen(true)}
           onGoHome={requestHome}
           showHome={state.phase !== 'LOBBY' || screen !== 'lobby'}
+          onHowToPlay={() => setGuideOpen(true)}
         />
       </header>
 
@@ -814,6 +841,7 @@ export default function Game() {
             stats={progress.stats}
             updateStats={updateProgress}
             play={sound.play}
+            playCry={sound.playCry}
             onNotice={setNotice}
             onExit={goHome}
           />
@@ -925,6 +953,8 @@ export default function Game() {
         />
       )}
 
+      {guideOpen && <HowToPlay onClose={() => setGuideOpen(false)} />}
+
       {confirmHome && (
         <ConfirmDialog
           title="Leave this game?"
@@ -963,7 +993,7 @@ export default function Game() {
       )}
 
       {shownBadge && (
-        <div role="status" className="fixed top-16 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-2 bg-pokemon-cream border-4 border-pokemon-yellow-dark text-ink font-body px-4 py-2 rounded-2xl shadow-xl animate-bounce-in">
+        <div role="status" className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[80] pointer-events-none flex items-center gap-2 bg-screen border-4 border-pokemon-yellow-dark text-ink font-body px-4 py-2 rounded-2xl shadow-xl animate-bounce-in">
           <span className="text-2xl" aria-hidden>
             {shownBadge.icon}
           </span>

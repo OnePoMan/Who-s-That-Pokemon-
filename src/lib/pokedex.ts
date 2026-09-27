@@ -44,6 +44,19 @@ export function artworkUrl(id: number): string {
   return `${SPRITES}/other/official-artwork/${id}.png`;
 }
 
+const CRIES = 'https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest';
+
+export function cryUrl(id: number): string {
+  return `${CRIES}/${id}.ogg`;
+}
+
+const speciesByForm = new Map<number, number>(forms.map(([id, , speciesId]) => [id, speciesId]));
+
+/** The species a form belongs to (a species is its own). */
+export function speciesOf(id: number): number {
+  return speciesByForm.get(id) ?? id;
+}
+
 export function getPokemon(id: number): PokemonData | null {
   const name = nameById.get(id);
   if (!name) return null;

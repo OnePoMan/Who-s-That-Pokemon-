@@ -43,7 +43,7 @@ export function AvatarIcon({ avatarId, size = 'md' }: { avatarId: number; size?:
   const trainer = trainerFor(avatarId);
   const sizeClass = size === 'sm' ? 'w-8 h-8' : size === 'lg' ? 'w-16 h-16' : 'w-12 h-12';
   return (
-    <div className={`${sizeClass} shrink-0 rounded-full overflow-hidden bg-pokemon-light-gray border-2 border-pokemon-dark shadow-md`}>
+    <div className={`${sizeClass} shrink-0 rounded-full overflow-hidden bg-surface-2 border-2 border-line shadow-md`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprites; no optimisation wanted */}
       <img src={spriteUrl(trainer.sprite)} alt={trainer.name} className="w-full h-full object-cover object-top pixelated" draggable={false} />
     </div>
@@ -70,10 +70,10 @@ export default function AvatarPicker({ selectedId, onSelect, disabledIds = [], l
           title={trainer.name}
           onClick={() => onSelect(trainer.id)}
           disabled={disabledIds.includes(trainer.id)}
-          className={`w-11 h-11 rounded-full overflow-hidden transition-transform duration-200 border-2 bg-pokemon-light-gray ${
+          className={`w-11 h-11 rounded-full overflow-hidden transition-transform duration-200 border-2 bg-surface-2 ${
             selectedId === trainer.id
               ? 'border-pokemon-blue ring-2 ring-pokemon-blue scale-110 shadow-lg'
-              : 'border-pokemon-gray/40 hover:scale-105 hover:border-pokemon-dark'
+              : 'border-line/40 hover:scale-105 hover:border-line'
           } disabled:opacity-30 disabled:cursor-not-allowed`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}

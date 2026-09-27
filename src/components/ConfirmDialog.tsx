@@ -25,10 +25,10 @@ export default function ConfirmDialog({ title, message, confirmLabel, onConfirm,
     <div className="fixed inset-0 z-[75] flex items-center justify-center p-6 bg-black/50" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" className="pokemon-card max-w-xs w-full">
         <div className="pokemon-card-body space-y-4 font-body text-center">
-          <h2 id="confirm-title" className="font-bold text-pokemon-dark">
+          <h2 id="confirm-title" className="font-bold text-ink">
             {title}
           </h2>
-          <p id="confirm-message" className="text-sm text-gray-600">
+          <p id="confirm-message" className="text-sm text-ink-muted">
             {message}
           </p>
           <div className="flex gap-2">

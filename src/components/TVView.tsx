@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import DrawingCanvas from './DrawingCanvas';
 import HintBar from './HintBar';
 import Timer from './Timer';
-import PokemonSilhouette from './PokemonSilhouette';
+import RevealStage from './RevealStage';
 import PokeBallButton from './PokeBallButton';
 import { AvatarIcon } from './AvatarPicker';
 import { ScoreChip, type SavedDrawing } from './RevealPhase';
@@ -36,13 +36,13 @@ export default function TVView({ state, code, remainingMs, hint, drawings, strea
 
   return (
     // Takes over the whole screen: a TV or laptop has room the phone-sized frame would waste.
-    <div className="fixed inset-0 z-[55] overflow-auto bg-pokemon-cream flex flex-col lg:flex-row gap-6 p-6">
+    <div className="fixed inset-0 z-[55] overflow-auto bg-screen flex flex-col lg:flex-row gap-6 p-6">
       <section className={`flex-1 flex flex-col items-center gap-3 min-w-0 ${state.phase === 'DRAWING' ? 'justify-start' : 'justify-center'}`} aria-live="polite">
         {state.phase === 'MEMORIZE' && drawer && (
           <div className="text-center space-y-4">
             <AvatarIcon avatarId={drawer.avatarId} size="lg" />
             <p className="font-pixel text-lg text-ink leading-relaxed">{drawer.nickname} is memorizing…</p>
-            {remainingMs !== null && <p className="font-pixel text-5xl text-pokemon-red">{Math.ceil(remainingMs / 1000)}</p>}
+            {remainingMs !== null && <p className="font-pixel text-5xl text-accent-red">{Math.ceil(remainingMs / 1000)}</p>}
           </div>
         )}
 
@@ -87,7 +87,7 @@ export default function TVView({ state, code, remainingMs, hint, drawings, strea
         <div className="pokemon-card">
           <div className="pokemon-card-body text-center space-y-1">
             <p className="text-xs font-body text-ink-muted">Join on your phone</p>
-            <p className="font-pixel text-2xl tracking-[0.25em] text-pokemon-blue">{code}</p>
+            <p className="font-pixel text-2xl tracking-[0.25em] text-accent">{code}</p>
             <p className="text-xs font-body text-ink-muted break-all">{joinUrl}</p>
           </div>
         </div>
@@ -133,7 +133,7 @@ function TVReveal({ state, drawing }: { state: GameState; drawing: SavedDrawing 
   return (
     <div className="flex flex-col items-center gap-4">
       <p className="font-pixel text-xl text-ink leading-relaxed">{headline}</p>
-      <p className="font-pixel text-lg text-pokemon-blue h-8">{revealed ? `It's ${pokemon.name}!` : "Who's that Pokémon?"}</p>
+      <p className="font-pixel text-lg text-accent h-8">{revealed ? `It's ${pokemon.name}!` : "Who's that Pokémon?"}</p>
       <div className="flex justify-center gap-6">
         <div className={`${box} rounded-xl overflow-hidden border-4 border-line bg-white`}>
           {drawing && (
@@ -141,7 +141,7 @@ function TVReveal({ state, drawing }: { state: GameState; drawing: SavedDrawing 
             <img src={drawing.dataUrl} alt="The drawing" className="w-full h-full object-contain" />
           )}
         </div>
-        <PokemonSilhouette imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
+        <RevealStage imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
       </div>
     </div>
   );

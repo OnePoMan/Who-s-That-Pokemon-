@@ -26,7 +26,7 @@ export default function PokemonSilhouette({ imageUrl, revealed, name, className 
         </div>
       )}
       {status === 'error' ? (
-        <div className="flex flex-col items-center justify-center text-center text-pokemon-gray text-xs font-body p-4">
+        <div className="flex flex-col items-center justify-center text-center text-ink-muted text-xs font-body p-4">
           <span className="text-4xl" aria-hidden>?</span>
           Artwork unavailable offline
         </div>

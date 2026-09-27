@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPokemon, getPokemonInfo, getPokemonPool, isCorrectGuess, normalizeName, pickRandomPokemon, searchPokemonNames } from './pokedex';
+import { DEX_ORDER, cryUrl, getPokemon, getPokemonInfo, getPokemonPool, isCorrectGuess, normalizeName, pickRandomPokemon, searchPokemonNames, speciesOf } from './pokedex';
 import { buildHint, hintStage } from './hints';
 
 describe('names', () => {
@@ -98,5 +98,14 @@ describe('hints', () => {
     expect(buildHint(mrMime, 0)).toEqual({ blanks: ['_', '_', '.', ' ', '_', '_', '_', '_'] });
     expect(buildHint(mrMime, 1)).toMatchObject({ types: ['psychic', 'fairy'], generation: 1, region: 'Kanto' });
     expect(buildHint(mrMime, 2).blanks.join('')).toBe('M_. ____');
+  });
+});
+
+describe('cries', () => {
+  it('uses the PokeAPI cry for a Pokémon and knows each form’s species', () => {
+    expect(cryUrl(25)).toBe('https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/25.ogg');
+    const megaVenusaur = DEX_ORDER.find((e) => e.name === 'Mega Venusaur')!;
+    expect(speciesOf(megaVenusaur.id)).toBe(3);
+    expect(speciesOf(25)).toBe(25);
   });
 });

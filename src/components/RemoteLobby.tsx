@@ -45,7 +45,7 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
           <AvatarIcon avatarId={p.avatarId} size="sm" />
           <span className="flex-1 font-bold text-ink">{p.nickname}</span>
           {i === 0 && <span className="text-[10px] font-bold uppercase text-ink-muted">Host</span>}
-          {p.id === myId && i !== 0 && <span className="text-[10px] font-bold uppercase text-pokemon-blue">You</span>}
+          {p.id === myId && i !== 0 && <span className="text-[10px] font-bold uppercase text-accent">You</span>}
         </li>
       ))}
       {spectators > 0 && (
@@ -87,7 +87,7 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
           <div className="pokemon-card w-full">
             <div className="pokemon-card-body text-center space-y-3">
               <p className="text-xs font-body text-ink-muted">Share the code or invite link — up to {MAX_PLAYERS} players, plus a TV screen to watch</p>
-              <p className="font-pixel text-2xl tracking-[0.3em] text-pokemon-blue select-all" aria-label={`Room code ${code.split('').join(' ')}`}>
+              <p className="font-pixel text-2xl tracking-[0.3em] text-accent select-all" aria-label={`Room code ${code.split('').join(' ')}`}>
                 {code}
               </p>
               <PokeBallButton onClick={shareInvite} variant="blue" size="sm" className="w-full">
@@ -171,7 +171,7 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
       </div>
 
       {error && (
-        <p role="alert" className="w-full text-sm font-body font-semibold text-pokemon-red-dark bg-red-50 border border-pokemon-red/30 rounded-lg p-3">
+        <p role="alert" className="w-full text-sm font-body font-semibold text-accent-red bg-red-50 border border-pokemon-red/30 rounded-lg p-3">
           {error}
         </p>
       )}

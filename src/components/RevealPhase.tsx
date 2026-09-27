@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Player, PokemonData, RoundOutcome } from '@/lib/game-state';
 import type { DrawEvent } from '@/lib/canvas-engine';
-import PokemonSilhouette from './PokemonSilhouette';
+import RevealStage from './RevealStage';
 import DrawingReplay from './DrawingReplay';
 import { AvatarIcon } from './AvatarPicker';
 import PokeBallButton from './PokeBallButton';
@@ -36,7 +36,7 @@ interface RevealPhaseProps {
 function headline(outcome: RoundOutcome, solver: Player | null, awaiting: boolean): { text: string; color: string } {
   if (outcome === 'correct') return { text: awaiting ? 'Correct! Who got it?' : `${solver?.nickname ?? 'Someone'} got it!`, color: 'text-green-700' };
   if (outcome === 'skipped') return { text: 'Skipped', color: 'text-ink-muted' };
-  return { text: "Time's up!", color: 'text-pokemon-red' };
+  return { text: "Time's up!", color: 'text-accent-red' };
 }
 
 export default function RevealPhase({
@@ -99,29 +99,29 @@ export default function RevealPhase({
 
       <div className="text-center h-8 flex items-center" aria-live="polite">
         {revealed ? (
-          <p className="font-pixel text-sm text-pokemon-dark animate-fade-in leading-relaxed">It&apos;s {pokemon.name}!</p>
+          <p className="font-pixel text-sm text-ink animate-fade-in leading-relaxed">It&apos;s {pokemon.name}!</p>
         ) : (
-          <p className="font-pixel text-[10px] text-pokemon-gray">Who&apos;s that Pokémon?</p>
+          <p className="font-pixel text-[10px] text-ink-muted">Who&apos;s that Pokémon?</p>
         )}
       </div>
 
       <div className="flex flex-col items-center gap-1">
-        <span className="text-[10px] font-bold text-pokemon-gray uppercase tracking-widest">{drawer.nickname}&apos;s drawing</span>
-        <div className={`${box} rounded-lg overflow-hidden border-4 border-pokemon-dark bg-white`}>
+        <span className="text-[10px] font-bold text-ink-muted uppercase tracking-widest">{drawer.nickname}&apos;s drawing</span>
+        <div className={`${box} rounded-lg overflow-hidden border-4 border-line bg-white`}>
           {drawing && replaying ? (
             <DrawingReplay events={drawing.timeline} onDone={() => setReplaying(false)} />
           ) : drawing ? (
             // eslint-disable-next-line @next/next/no-img-element -- local data URL
             <img src={drawing.dataUrl} alt={`${drawer.nickname}'s drawing`} className="w-full h-full object-contain" draggable={false} />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-pokemon-gray text-sm">No drawing</div>
+            <div className="w-full h-full flex items-center justify-center text-ink-muted text-sm">No drawing</div>
           )}
         </div>
       </div>
 
       <div className="flex flex-col items-center gap-1">
-        <span className="text-[10px] font-bold text-pokemon-gray uppercase tracking-widest">Official</span>
-        <PokemonSilhouette imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={`${box} animate-bounce-in`} />
+        <span className="text-[10px] font-bold text-ink-muted uppercase tracking-widest">Official</span>
+        <RevealStage imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
       </div>
 
       <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 py-1 font-body" aria-label="Scores">
@@ -157,7 +157,7 @@ export function ScoreChip({ player, streak = 0 }: { player: Player; streak?: num
     <div className="flex items-center gap-1.5">
       <AvatarIcon avatarId={player.avatarId} size="sm" />
       <span className="text-[11px] font-bold text-ink">{player.nickname}</span>
-      <span className="text-base font-black text-pokemon-blue">{player.score}</span>
+      <span className="text-base font-black text-accent">{player.score}</span>
       {streak >= 2 && (
         <span className="text-[11px] font-bold text-orange-700 bg-orange-100 rounded-full px-1.5" title={`${streak} correct in a row`}>
           🔥{streak}

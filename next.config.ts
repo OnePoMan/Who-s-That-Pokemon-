@@ -2,9 +2,10 @@ import type { NextConfig } from 'next';
 
 const isDev = process.env.NODE_ENV === 'development';
 
-// Artwork comes from the PokeAPI sprite repository; rooms are brokered by the public PeerJS
+// Artwork and cries come from the PokeAPI sprite and cry repositories; rooms are brokered by the public PeerJS
 // server. The game itself travels over WebRTC, which CSP does not govern.
 const ARTWORK = 'https://raw.githubusercontent.com/PokeAPI/sprites/';
+const CRIES = 'https://raw.githubusercontent.com/PokeAPI/cries/';
 const PEER_BROKER = (() => {
   const host = process.env.NEXT_PUBLIC_PEER_HOST;
   if (!host) return 'https://0.peerjs.com wss://0.peerjs.com';
@@ -24,7 +25,7 @@ const csp = [
   `connect-src 'self' ${PEER_BROKER}${isDev ? ' ws: http://localhost:*' : ''}`,
   "worker-src 'self'",
   "manifest-src 'self'",
-  "media-src 'none'",
+  `media-src ${CRIES}`,
   "object-src 'none'",
   "frame-src 'none'",
   "base-uri 'self'",

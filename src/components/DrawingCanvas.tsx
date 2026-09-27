@@ -357,7 +357,7 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
     <div className="flex flex-col items-center gap-2 w-full">
       <div
         ref={boxRef}
-        className="relative aspect-square bg-white rounded-xl shadow-lg overflow-hidden border-3 border-pokemon-dark"
+        className="relative aspect-square bg-white rounded-xl shadow-lg overflow-hidden border-3 border-line"
         style={{ width: side ?? 'min(100%, 600px, 45dvh)' }}
       >
         <div ref={viewportRef} className={`absolute inset-0 ${cursor}`} style={{ touchAction: 'none' }}>
@@ -397,7 +397,7 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
           </div>
 
           <div className="flex gap-1 items-center overflow-x-auto px-1 py-0.5 no-scrollbar" role="radiogroup" aria-label="Colour">
-            <label className="relative shrink-0 w-7 h-7 rounded-full border-2 border-gray-300 overflow-hidden cursor-pointer color-wheel" title="Any colour">
+            <label className="relative shrink-0 w-7 h-7 rounded-full border-2 border-line/30 overflow-hidden cursor-pointer color-wheel" title="Any colour">
               <span className="sr-only">Choose any colour</span>
               <input
                 type="color"
@@ -410,7 +410,7 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
             {recent.map((hex) => (
               <Swatch key={`r-${hex}`} hex={hex} name={`Recent ${hex}`} selected={color === hex} onSelect={selectColor} />
             ))}
-            {recent.length > 0 && <span className="w-px h-5 bg-gray-300 shrink-0" aria-hidden />}
+            {recent.length > 0 && <span className="w-px h-5 bg-line/30 shrink-0" aria-hidden />}
             {COLORS.map(({ hex, name }) => (
               <Swatch key={hex} hex={hex} name={name} selected={color === hex} onSelect={selectColor} />
             ))}
@@ -426,13 +426,13 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
                   aria-checked={size === s}
                   aria-label={`Brush size ${s}`}
                   onClick={() => selectSize(s)}
-                  className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${size === s ? 'bg-pokemon-blue shadow' : 'bg-surface-2 hover:bg-gray-300'}`}
+                  className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${size === s ? 'bg-pokemon-blue shadow' : 'bg-surface-2 hover:bg-line/20'}`}
                 >
-                  <span className={`rounded-full ${size === s ? 'bg-white' : 'bg-gray-700'}`} style={{ width: s + 3, height: s + 3 }} />
+                  <span className={`rounded-full ${size === s ? 'bg-white' : 'bg-ink'}`} style={{ width: s + 3, height: s + 3 }} />
                 </button>
               ))}
             </div>
-            <span className="w-px h-6 bg-gray-300 mx-1" aria-hidden />
+            <span className="w-px h-6 bg-line/30 mx-1" aria-hidden />
             <button type="button" aria-label="Undo" title="Undo" onClick={(e) => paced(e) && managerRef.current?.undo()} disabled={!history.canUndo} className="tool-button">
               <Icon name="undo" />
             </button>
@@ -458,7 +458,7 @@ function Swatch({ hex, name, selected, onSelect }: { hex: string; name: string; 
       aria-label={name}
       title={name}
       onClick={() => onSelect(hex)}
-      className={`shrink-0 w-7 h-7 rounded-full border-2 transition-transform ${selected ? 'border-pokemon-blue scale-110 shadow-md' : 'border-gray-300 hover:scale-110'}`}
+      className={`shrink-0 w-7 h-7 rounded-full border-2 transition-transform ${selected ? 'border-pokemon-blue scale-110 shadow-md' : 'border-line/30 hover:scale-110'}`}
       style={{ backgroundColor: hex }}
     />
   );

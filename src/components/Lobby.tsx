@@ -191,7 +191,7 @@ export function Logo() {
   return (
     <div className="text-center py-2">
       <h1 className="pokemon-title text-xl sm:text-2xl leading-relaxed">
-        <span className="block text-pokemon-red">Who&apos;s That</span>
+        <span className="block text-accent-red">Who&apos;s That</span>
         <span className="block logo-yellow">Pokémon?</span>
       </h1>
       <p className="text-ink-muted mt-1 text-xs font-body font-semibold tracking-wide uppercase">Draw &amp; Guess Edition</p>

@@ -24,9 +24,15 @@ export const viewport: Viewport = {
   themeColor: '#DC0A2D',
 };
 
+// Applies a theme chosen in settings before the first paint ("system" leaves it to the device).
+const THEME_SCRIPT = `(function(){try{var t=JSON.parse(localStorage.getItem("wtp-prefs")||"{}").theme;if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`h-full antialiased ${pressStart.variable} ${fredoka.variable}`}>
+    <html lang="en" className={`h-full antialiased ${pressStart.variable} ${fredoka.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <div className="pokeball-bg" aria-hidden />
         <div className="pokedex-shell relative z-10 flex-1 flex flex-col max-w-2xl mx-auto w-full p-2 sm:p-3">

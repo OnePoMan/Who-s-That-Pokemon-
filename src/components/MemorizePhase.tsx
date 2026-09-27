@@ -35,8 +35,8 @@ export default function MemorizePhase({
     return (
       <div className="flex flex-col items-center gap-4 text-center animate-fade-in">
         <AvatarIcon avatarId={drawer.avatarId} size="lg" />
-        <p className="font-body text-base font-bold text-pokemon-dark">{drawer.nickname} is memorizing a Pokémon…</p>
-        <p className="font-body text-sm text-pokemon-gray">Get ready to guess!</p>
+        <p className="font-body text-base font-bold text-ink">{drawer.nickname} is memorizing a Pokémon…</p>
+        <p className="font-body text-sm text-ink-muted">Get ready to guess!</p>
         {remainingMs !== null && <Countdown remainingMs={remainingMs} totalSeconds={totalSeconds} />}
       </div>
     );
@@ -48,8 +48,8 @@ export default function MemorizePhase({
         <div className="flex items-center gap-3">
           <AvatarIcon avatarId={drawer.avatarId} size="lg" />
           <div className="text-left">
-            <p className="text-base font-bold text-pokemon-dark font-body">{drawer.nickname}&apos;s turn to draw!</p>
-            <p className="text-xs text-pokemon-gray font-body">Hand the phone to {drawer.nickname}.</p>
+            <p className="text-base font-bold text-ink font-body">{drawer.nickname}&apos;s turn to draw!</p>
+            <p className="text-xs text-ink-muted font-body">Hand the phone to {drawer.nickname}.</p>
           </div>
         </div>
         <div className="pokemon-card w-full max-w-xs">
@@ -57,7 +57,7 @@ export default function MemorizePhase({
             <p className="text-sm text-ink">
               <span className="font-bold">{listNames(guessers)}</span>, look away!
             </p>
-            <p className="text-xs text-pokemon-gray mt-1">
+            <p className="text-xs text-ink-muted mt-1">
               You&apos;ll get the signal to watch once the Pokémon is hidden.
             </p>
           </div>
@@ -74,17 +74,17 @@ export default function MemorizePhase({
   return (
     <div className="flex flex-col items-center gap-3 animate-fade-in w-full">
       {view === 'local' && (
-        <p className="font-body text-xs font-bold text-pokemon-red bg-red-50 border border-pokemon-red/30 rounded-full px-3 py-1">
+        <p className="font-body text-xs font-bold text-accent-red bg-red-50 border border-pokemon-red/30 rounded-full px-3 py-1">
           {guessers.length === 1 ? `${guessers[0].nickname}, no peeking!` : 'Everyone else, no peeking!'}
         </p>
       )}
-      <h2 className="font-pixel text-xs text-pokemon-dark text-center leading-relaxed">Memorize this Pokémon!</h2>
+      <h2 className="font-pixel text-xs text-ink text-center leading-relaxed">Memorize this Pokémon!</h2>
       {showArtwork ? (
         <PokemonSilhouette imageUrl={pokemon.artworkUrl} revealed name={pokemon.name} className="w-[min(60vw,240px)]" />
       ) : (
-        <p className="font-body text-xs text-pokemon-gray">Name only — draw it from memory!</p>
+        <p className="font-body text-xs text-ink-muted">Name only — draw it from memory!</p>
       )}
-      <p className="font-pixel text-base text-pokemon-blue text-center leading-relaxed">{pokemon.name}</p>
+      <p className="font-pixel text-base text-accent text-center leading-relaxed">{pokemon.name}</p>
       <Countdown remainingMs={remainingMs} totalSeconds={totalSeconds} />
       <PokeBallButton onClick={onReady} variant="blue" size="md">
         I&apos;m ready — start drawing
@@ -99,7 +99,7 @@ function Countdown({ remainingMs, totalSeconds }: { remainingMs: number; totalSe
   return (
     <div className="relative w-14 h-14" role="timer" aria-label={`${seconds} seconds to memorize`}>
       <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36" aria-hidden>
-        <circle cx="18" cy="18" r="16" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+        <circle cx="18" cy="18" r="16" fill="none" stroke="var(--surface-2)" strokeWidth="3" />
         <circle
           cx="18"
           cy="18"
@@ -113,7 +113,7 @@ function Countdown({ remainingMs, totalSeconds }: { remainingMs: number; totalSe
           strokeLinecap="round"
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-pokemon-dark font-body">{seconds}</span>
+      <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-ink font-body">{seconds}</span>
     </div>
   );
 }

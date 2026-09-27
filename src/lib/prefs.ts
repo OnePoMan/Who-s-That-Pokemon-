@@ -7,7 +7,13 @@ export interface Prefs {
   bgmVolume: number; // 0..1
   sfxVolume: number; // 0..1
   haptics: boolean;
+  /** Play the Pokémon's cry when it is revealed. */
+  cries: boolean;
+  theme: Theme;
 }
+
+export type Theme = 'system' | 'light' | 'dark';
+export const THEMES: readonly Theme[] = ['system', 'light', 'dark'];
 
 export const DEFAULT_PREFS: Prefs = {
   bgmEnabled: true,
@@ -15,6 +21,8 @@ export const DEFAULT_PREFS: Prefs = {
   bgmVolume: 0.6,
   sfxVolume: 0.8,
   haptics: true,
+  cries: true,
+  theme: 'system',
 };
 
 const KEY = 'wtp-prefs';
@@ -32,6 +40,8 @@ export function loadPrefs(): Prefs {
       bgmVolume: unit(raw.bgmVolume, DEFAULT_PREFS.bgmVolume),
       sfxVolume: unit(raw.sfxVolume, DEFAULT_PREFS.sfxVolume),
       haptics: bool(raw.haptics, DEFAULT_PREFS.haptics),
+      cries: bool(raw.cries, DEFAULT_PREFS.cries),
+      theme: THEMES.includes(raw.theme) ? raw.theme : DEFAULT_PREFS.theme,
     };
   } catch {
     return DEFAULT_PREFS;

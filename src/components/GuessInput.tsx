@@ -68,7 +68,7 @@ export default function GuessInput({ onGuess, disabled = false, placeholder = 'S
           id={listId}
           role="listbox"
           aria-label="Matching Pokémon"
-          className="absolute bottom-full mb-1 left-0 right-0 z-20 max-h-64 overflow-y-auto bg-white rounded-xl border-3 border-pokemon-dark shadow-xl"
+          className="absolute bottom-full mb-1 left-0 right-0 z-20 max-h-64 overflow-y-auto bg-surface rounded-xl border-3 border-line shadow-xl"
         >
           {suggestions.map((name, i) => (
             <li key={name} role="option" id={`${listId}-${i}`} aria-selected={i === highlight}>
@@ -78,7 +78,7 @@ export default function GuessInput({ onGuess, disabled = false, placeholder = 'S
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => submit(name, e.timeStamp)}
                 className={`w-full text-left px-3 py-2.5 text-sm font-body font-semibold ${
-                  i === highlight ? 'bg-pokemon-blue text-white' : 'text-pokemon-dark hover:bg-gray-100'
+                  i === highlight ? 'bg-pokemon-blue text-white' : 'text-ink hover:bg-surface-2'
                 }`}
               >
                 {name}
@@ -87,7 +87,7 @@ export default function GuessInput({ onGuess, disabled = false, placeholder = 'S
           ))}
         </ul>
       )}
-      <div className="flex rounded-xl border-3 border-pokemon-dark overflow-hidden bg-white">
+      <div className="flex rounded-xl border-3 border-line overflow-hidden bg-surface">
         <input
           type="text"
           role="combobox"
@@ -113,7 +113,7 @@ export default function GuessInput({ onGuess, disabled = false, placeholder = 'S
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={onKeyDown}
-          className="flex-1 min-w-0 px-3 py-2.5 text-base font-body text-pokemon-dark outline-none disabled:bg-gray-100"
+          className="flex-1 min-w-0 px-3 py-2.5 text-base font-body text-ink outline-none disabled:bg-surface-2"
         />
         <button
           type="submit"

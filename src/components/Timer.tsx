@@ -13,7 +13,7 @@ export default function Timer({ remainingMs, totalMs }: TimerProps) {
 
   return (
     <div className="flex items-center gap-2 w-full" role="timer" aria-label={`${seconds} seconds left`}>
-      <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden border border-pokemon-dark/20">
+      <div className="relative w-full h-3 bg-surface-2 rounded-full overflow-hidden border border-line/20">
         <div
           className={`h-full rounded-full transition-[width] duration-200 ease-linear ${
             isCritical ? 'bg-pokemon-red timer-warning' : isWarning ? 'bg-pokemon-yellow' : 'bg-pokemon-blue'
@@ -23,7 +23,7 @@ export default function Timer({ remainingMs, totalMs }: TimerProps) {
       </div>
       <span
         className={`text-lg font-bold min-w-[3ch] text-right tabular-nums font-body ${
-          isCritical ? 'text-pokemon-red timer-warning' : isWarning ? 'text-pokemon-yellow-dark' : 'text-pokemon-dark'
+          isCritical ? 'text-accent-red timer-warning' : isWarning ? 'text-pokemon-yellow-dark' : 'text-ink'
         }`}
       >
         {seconds}

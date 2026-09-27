@@ -40,9 +40,9 @@ export default function DrawingGallery({ roundResults, players, drawings, onShar
         role="dialog"
         aria-modal="true"
         aria-labelledby="gallery-title"
-        className="bg-pokemon-cream rounded-2xl shadow-2xl border-4 border-pokemon-dark w-full max-w-2xl max-h-[85dvh] flex flex-col"
+        className="bg-screen rounded-2xl shadow-2xl border-4 border-line w-full max-w-2xl max-h-[85dvh] flex flex-col"
       >
-        <div className="flex items-center justify-between p-4 border-b-2 border-pokemon-dark bg-gradient-to-r from-pokemon-red to-pokemon-red-dark rounded-t-xl">
+        <div className="flex items-center justify-between p-4 border-b-2 border-line bg-gradient-to-r from-pokemon-red to-pokemon-red-dark rounded-t-xl">
           <h2 id="gallery-title" className="font-pixel text-xs text-white">
             Drawing Gallery
           </h2>
@@ -62,7 +62,7 @@ export default function DrawingGallery({ roundResults, players, drawings, onShar
 
         <div className="flex-1 overflow-y-auto p-4">
           {roundResults.length === 0 ? (
-            <p className="text-center text-pokemon-gray py-8 font-body">No drawings yet!</p>
+            <p className="text-center text-ink-muted py-8 font-body">No drawings yet!</p>
           ) : (
             <ul className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {roundResults.map((result) => {
@@ -70,34 +70,34 @@ export default function DrawingGallery({ roundResults, players, drawings, onShar
                 const drawer = nameOf(result.drawerId);
                 const badge = OUTCOME_BADGE[result.outcome];
                 return (
-                  <li key={result.round} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="aspect-square bg-white border-b border-gray-200">
+                  <li key={result.round} className="bg-surface rounded-xl border border-line/20 overflow-hidden">
+                    <div className="aspect-square bg-white border-b border-line/20">
                       {drawing ? (
                         // eslint-disable-next-line @next/next/no-img-element -- local data URL
                         <img src={drawing.dataUrl} alt={`${drawer}'s drawing of ${result.pokemon.name}`} className="w-full h-full object-contain" draggable={false} />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-pokemon-gray text-xs font-body">No drawing</div>
+                        <div className="w-full h-full flex items-center justify-center text-ink-muted text-xs font-body">No drawing</div>
                       )}
                     </div>
                     <div className="p-2 space-y-1 font-body">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-bold text-pokemon-dark truncate">{result.pokemon.name}</span>
+                        <span className="text-xs font-bold text-ink truncate">{result.pokemon.name}</span>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${badge.className}`}>{badge.label}</span>
                       </div>
-                      <p className="text-[10px] text-gray-600">by {drawer}</p>
+                      <p className="text-[10px] text-ink-muted">by {drawer}</p>
                       {drawing && (
                         <div className="flex gap-1">
                           <button
                             type="button"
                             onClick={() => downloadUrl(drawing.dataUrl, `${safeFilename(result.pokemon.name, 'by', drawer)}.png`)}
-                            className="flex-1 py-1 rounded-lg text-[10px] font-bold text-pokemon-blue bg-blue-50 hover:bg-blue-100 border border-pokemon-blue/20"
+                            className="flex-1 py-1 rounded-lg text-[10px] font-bold text-accent bg-blue-50 hover:bg-blue-100 border border-pokemon-blue/20"
                           >
                             Download
                           </button>
                           <button
                             type="button"
                             onClick={() => onShare(result.round)}
-                            className="flex-1 py-1 rounded-lg text-[10px] font-bold text-pokemon-red bg-red-50 hover:bg-red-100 border border-pokemon-red/20"
+                            className="flex-1 py-1 rounded-lg text-[10px] font-bold text-accent-red bg-red-50 hover:bg-red-100 border border-pokemon-red/20"
                           >
                             Share
                           </button>

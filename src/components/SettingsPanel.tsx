@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import type { Prefs } from '@/lib/prefs';
+import { THEMES, type Prefs } from '@/lib/prefs';
 
 interface SettingsPanelProps {
   prefs: Prefs;
@@ -10,9 +10,10 @@ interface SettingsPanelProps {
   onOpenGallery: () => void;
   onGoHome: () => void;
   showHome: boolean;
+  onHowToPlay: () => void;
 }
 
-export default function SettingsPanel({ prefs, onChangePrefs, drawingCount, onOpenGallery, onGoHome, showHome }: SettingsPanelProps) {
+export default function SettingsPanel({ prefs, onChangePrefs, drawingCount, onOpenGallery, onGoHome, showHome, onHowToPlay }: SettingsPanelProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -50,9 +51,9 @@ export default function SettingsPanel({ prefs, onChangePrefs, drawingCount, onOp
       {open && (
         <div
           id={menuId}
-          className="absolute top-11 right-0 bg-white rounded-xl shadow-xl border-3 border-pokemon-dark p-4 w-64 animate-fade-in z-50 font-body"
+          className="absolute top-11 right-0 bg-surface rounded-xl shadow-xl border-3 border-line p-4 w-64 animate-fade-in z-50 font-body"
         >
-          <h3 className="text-sm font-bold text-pokemon-dark mb-3">Settings</h3>
+          <h3 className="text-sm font-bold text-ink mb-3">Settings</h3>
           <div className="space-y-3">
             <AudioRow
               label="Music"
@@ -68,18 +69,47 @@ export default function SettingsPanel({ prefs, onChangePrefs, drawingCount, onOp
               onToggle={() => onChangePrefs({ sfxEnabled: !prefs.sfxEnabled })}
               onVolume={(v) => onChangePrefs({ sfxVolume: v })}
             />
+            <Toggle label="Pokémon cries" checked={prefs.cries} onChange={() => onChangePrefs({ cries: !prefs.cries })} />
             <Toggle label="Vibration" checked={prefs.haptics} onChange={() => onChangePrefs({ haptics: !prefs.haptics })} />
+            <fieldset>
+              <legend className="text-sm font-semibold text-ink mb-1">Theme</legend>
+              <div className="flex gap-1">
+                {THEMES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={prefs.theme === t}
+                    onClick={() => onChangePrefs({ theme: t })}
+                    className={`pokemon-toggle flex-1 py-1 text-xs ${prefs.theme === t ? 'active' : ''}`}
+                  >
+                    {t === 'system' ? 'Auto' : t === 'light' ? 'Light' : 'Dark'}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <hr className="border-line/20" />
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onHowToPlay();
+              }}
+              className="w-full text-left text-sm font-semibold text-accent hover:opacity-80"
+            >
+              How to play
+            </button>
 
             {drawingCount > 0 && (
               <>
-                <hr className="border-gray-200" />
+                <hr className="border-line/20" />
                 <button
                   type="button"
                   onClick={() => {
                     setOpen(false);
                     onOpenGallery();
                   }}
-                  className="w-full text-left text-sm font-semibold text-pokemon-blue hover:opacity-80"
+                  className="w-full text-left text-sm font-semibold text-accent hover:opacity-80"
                 >
                   Drawing gallery ({drawingCount})
                 </button>
@@ -88,14 +118,14 @@ export default function SettingsPanel({ prefs, onChangePrefs, drawingCount, onOp
 
             {showHome && (
               <>
-                <hr className="border-gray-200" />
+                <hr className="border-line/20" />
                 <button
                   type="button"
                   onClick={() => {
                     setOpen(false);
                     onGoHome();
                   }}
-                  className="w-full text-left text-sm font-semibold text-pokemon-red hover:opacity-80"
+                  className="w-full text-left text-sm font-semibold text-accent-red hover:opacity-80"
                 >
                   Back to home
                 </button>
@@ -111,14 +141,14 @@ export default function SettingsPanel({ prefs, onChangePrefs, drawingCount, onOp
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm font-semibold text-gray-700">{label}</span>
+      <span className="text-sm font-semibold text-ink">{label}</span>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
         onClick={onChange}
-        className={`w-12 h-6 rounded-full transition-colors relative ${checked ? 'bg-pokemon-blue' : 'bg-gray-300'}`}
+        className={`w-12 h-6 rounded-full transition-colors relative ${checked ? 'bg-pokemon-blue' : 'bg-line/40'}`}
       >
         <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'left-6' : 'left-0.5'}`} />
       </button>
