@@ -26,6 +26,8 @@ interface DrawingPhaseProps {
   onSkip: () => void;
   onGuess: (text: string) => void;
   onCanvasReady?: (manager: CanvasManager) => void;
+  /** Extra controls under the guess box (e.g. reactions). */
+  extra?: React.ReactNode;
 }
 
 export default function DrawingPhase({
@@ -42,6 +44,7 @@ export default function DrawingPhase({
   onSkip,
   onGuess,
   onCanvasReady,
+  extra,
 }: DrawingPhaseProps) {
   const [showLookBanner, setShowLookBanner] = useState(view === 'local');
   // Disables the buttons after the first tap; the game state also ignores repeats.
@@ -144,6 +147,7 @@ export default function DrawingPhase({
       />
       <ChatPanel messages={chatMessages} title="Guesses" />
       <GuessInput onGuess={onGuess} />
+      {extra}
     </div>
   );
 }

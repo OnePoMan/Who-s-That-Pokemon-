@@ -6,7 +6,9 @@ A drawing and guessing game for 2–8 players. One player gets a few seconds to 
 
 **One phone.** Hand the phone to the drawer; everyone else looks away. The drawer taps *Show me*, memorizes the Pokémon, then starts drawing. A banner tells the guessers to look; they shout guesses or type one into the guess box under the canvas (a name dropdown appears after the first letter, and a correct pick ends the round). *…got it!* and *Skip* are there for shouted guesses. Everyone takes a turn drawing.
 
-**Two phones.** One player taps *Play on two phones → Create a room* and shares the six-character code (or the invite link, which fills the code in). The other joins with it. The drawer's strokes appear live on the guesser's phone; the guesser types a guess and picks a name from the dropdown, so spelling never decides the round. The drawer can also confirm a guess or give up.
+**Several phones.** One player taps *Play on several phones → Create a room* and shares the six-character code (or the invite link, which fills the code in); up to 8 players join with it. The drawer's strokes appear live on everyone's phone; guessers type a guess and pick a name from the dropdown, so spelling never decides the round, and can send quick emoji reactions. The drawer can also confirm a guess (choosing who got it) or give up. A player who drops out keeps their seat and can rejoin with the same code; new players can't join once a game has started.
+
+**TV / big screen.** Open the site on a laptop or smart-TV browser, enter the room code and choose *Watch on this screen*. It shows the live drawing, timer, hints, guesses, reactions, reveal and scores for everyone in the room, and never receives the answer early. Up to 4 screens can watch.
 
 After each round the answer is revealed as a silhouette below the drawing, with a timelapse replay and a share card. Every drawing from the session is in the gallery (settings menu, or at the end of the game) to download or share.
 

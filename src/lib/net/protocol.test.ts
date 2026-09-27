@@ -97,6 +97,32 @@ describe('validateMessage', () => {
   });
 });
 
+describe('rooms with several phones', () => {
+  it('accepts spectator hellos without a name and player hellos with one', () => {
+    expect(validateMessage({ t: 'hello', v: 2, clientId: 'tv', role: 'spectator' })).toMatchObject({ role: 'spectator', name: 'TV' });
+    expect(validateMessage({ t: 'hello', v: 2, clientId: 'a', role: 'player', name: 'Ash', avatarId: 1 })).toMatchObject({ role: 'player', name: 'Ash' });
+    expect(validateMessage({ t: 'hello', v: 2, clientId: 'a', role: 'player' })).toBeNull();
+    expect(validateMessage({ t: 'hello', v: 2, clientId: 'a', role: 'admin', name: 'x', avatarId: 1 })).toBeNull();
+  });
+
+  it('only allows the fixed set of reactions', () => {
+    expect(validateMessage({ t: 'react', emoji: '🔥' })).toEqual({ t: 'react', emoji: '🔥' });
+    expect(validateMessage({ t: 'react', emoji: '<img src=x>' })).toBeNull();
+    expect(validateMessage({ t: 'reaction', from: 'p2', emoji: '😂' })).toEqual({ t: 'reaction', from: 'p2', emoji: '😂' });
+  });
+
+  it('validates lobby messages for up to eight players', () => {
+    const players = Array.from({ length: 8 }, (_, i) => ({ id: `p${i + 1}`, nickname: `P${i + 1}`, avatarId: i + 1, score: 0 }));
+    expect(validateMessage({ t: 'lobby', players, youId: 'p3', hostToken: 'tok', spectators: 1 })?.t).toBe('lobby');
+    expect(validateMessage({ t: 'lobby', players: [...players, players[0]], youId: 'p3', hostToken: 'tok', spectators: 1 })).toBeNull();
+    expect(validateMessage({ t: 'lobby', players, youId: 'p3', hostToken: 'tok', spectators: 99 })).toBeNull();
+  });
+
+  it('hides the answer from spectators too', () => {
+    expect(toWire(state, 'spectator', 0).currentPokemon).toBeNull();
+  });
+});
+
 describe('text cleaning', () => {
   it('strips control and direction-override characters', () => {
     expect(cleanText('Ash‮evil\u0000', 16)).toBe('Ashevil');

@@ -20,7 +20,13 @@ import {
   type RoundResult,
 } from '../game-state';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
+/** Big-screen spectators (e.g. a TV browser) that watch but don't play. */
+export const MAX_SPECTATORS = 4;
+export const SPECTATOR_ID = 'spectator';
+export const REACTIONS = ['😂', '🔥', '🤔', '😮', '👏', '❤️'] as const;
+export type Reaction = (typeof REACTIONS)[number];
+export type Role = 'player' | 'spectator';
 export const ROOM_PREFIX = 'wtp-draw-';
 // No 0/O, 1/I/L: codes are read aloud and typed on phones.
 export const ROOM_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -38,17 +44,21 @@ const INTENTS: readonly Intent[] = ['begin-drawing', 'correct', 'skip', 'next-ro
  */
 export type WireState = Omit<GameState, 'phaseEndsAt'> & { remainingMs: number | null; hint: Hint | null };
 
+export type RejectReason = 'full' | 'version' | 'started';
+
 export type Message =
-  | { t: 'hello'; v: number; clientId: string; name: string; avatarId: number }
+  | { t: 'hello'; v: number; clientId: string; role: Role; name: string; avatarId: number }
   // hostToken lets a reconnecting guest tell the real host from someone who took over the code.
-  | { t: 'lobby'; players: Player[]; youId: string; hostToken: string }
-  | { t: 'reject'; reason: 'full' | 'version' }
+  | { t: 'lobby'; players: Player[]; youId: string; hostToken: string; spectators: number }
+  | { t: 'reject'; reason: RejectReason }
   | { t: 'state'; state: WireState }
   | { t: 'intent'; intent: Intent }
   | { t: 'assign'; playerId: string }
   | { t: 'guess'; text: string }
   | { t: 'draw'; e: DrawEvent }
-  | { t: 'canvas'; round: number; events: DrawEvent[] };
+  | { t: 'canvas'; round: number; events: DrawEvent[] }
+  | { t: 'react'; emoji: Reaction }
+  | { t: 'reaction'; from: string; emoji: Reaction };
 
 /** Cryptographically random, so codes can't be predicted from earlier ones. */
 export function generateRoomCode(): string {
@@ -270,18 +280,30 @@ export function validateMessage(raw: unknown): Message | null {
   switch (raw.t) {
     case 'hello': {
       const clientId = cleanText(raw.clientId, 64);
+      if (!isInt(raw.v, 0, 999) || !clientId) return null;
+      // Old clients sent no role; they can only be players.
+      const role = raw.role === undefined ? 'player' : oneOf(raw.role, ['player', 'spectator'] as const) ? raw.role : null;
+      if (!role) return null;
+      if (role === 'spectator') return { t: 'hello', v: raw.v, clientId, role, name: 'TV', avatarId: 1 };
       const name = cleanText(raw.name, MAX_NAME_LENGTH);
-      if (!isInt(raw.v, 0, 999) || !clientId || !name || !isInt(raw.avatarId, 1, 999)) return null;
-      return { t: 'hello', v: raw.v, clientId, name, avatarId: raw.avatarId };
+      if (!name || !isInt(raw.avatarId, 1, 999)) return null;
+      return { t: 'hello', v: raw.v, clientId, role, name, avatarId: raw.avatarId };
     }
     case 'lobby': {
-      const players = validateArray(raw.players, 2, validatePlayer);
+      const players = validateArray(raw.players, MAX_PLAYERS, validatePlayer);
       const youId = cleanText(raw.youId, 64);
       const hostToken = cleanText(raw.hostToken, 64);
-      return players && youId && hostToken ? { t: 'lobby', players, youId, hostToken } : null;
+      if (!isInt(raw.spectators, 0, MAX_SPECTATORS)) return null;
+      return players && youId && hostToken ? { t: 'lobby', players, youId, hostToken, spectators: raw.spectators } : null;
     }
     case 'reject':
-      return oneOf(raw.reason, ['full', 'version'] as const) ? { t: 'reject', reason: raw.reason } : null;
+      return oneOf(raw.reason, ['full', 'version', 'started'] as const) ? { t: 'reject', reason: raw.reason } : null;
+    case 'react':
+      return oneOf(raw.emoji, REACTIONS) ? { t: 'react', emoji: raw.emoji } : null;
+    case 'reaction': {
+      const from = cleanText(raw.from, 64);
+      return from && oneOf(raw.emoji, REACTIONS) ? { t: 'reaction', from, emoji: raw.emoji } : null;
+    }
     case 'state': {
       const state = validateWireState(raw.state);
       return state ? { t: 'state', state } : null;

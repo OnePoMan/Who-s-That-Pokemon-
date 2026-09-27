@@ -6,7 +6,8 @@ import AvatarPicker, { AvatarIcon } from './AvatarPicker';
 import GameSettingsForm from './GameSettingsForm';
 import { Logo } from './Lobby';
 import { DEFAULT_SETTINGS, type GameSettings, type Player } from '@/lib/game-state';
-import { MAX_NAME_LENGTH, ROOM_CODE_LENGTH, normalizeRoomCode } from '@/lib/net/protocol';
+import { MAX_NAME_LENGTH, ROOM_CODE_LENGTH, SPECTATOR_ID, normalizeRoomCode } from '@/lib/net/protocol';
+import { MAX_PLAYERS } from '@/lib/game-state';
 import type { RoomStatus } from '@/hooks/useRoom';
 
 interface RemoteLobbyProps {
@@ -16,14 +17,17 @@ interface RemoteLobbyProps {
   isHost: boolean;
   /** Everyone in the room so far, host first. */
   players: Player[];
+  /** Big-screen spectators watching the room. */
+  spectators: number;
+  myId: string;
   initialCode: string | null;
   onHost: (name: string, avatarId: number) => void;
-  onJoin: (code: string, name: string, avatarId: number) => void;
+  onJoin: (code: string, name: string, avatarId: number, asSpectator?: boolean) => void;
   onStart: (settings: GameSettings) => void;
   onBack: () => void;
 }
 
-export default function RemoteLobby({ status, error, code, isHost, players, initialCode, onHost, onJoin, onStart, onBack }: RemoteLobbyProps) {
+export default function RemoteLobby({ status, error, code, isHost, players, spectators, myId, initialCode, onHost, onJoin, onStart, onBack }: RemoteLobbyProps) {
   const [name, setName] = useState('');
   const [avatarId, setAvatarId] = useState(1);
   const [joinCode, setJoinCode] = useState(initialCode ?? '');
@@ -34,7 +38,23 @@ export default function RemoteLobby({ status, error, code, isHost, players, init
   const inRoom = status !== 'idle' && status !== 'error';
   const nameOk = name.trim().length > 0;
   const validCode = normalizeRoomCode(joinCode);
-  const guest = players[1];
+  const roster = (
+    <ul className="w-full space-y-1.5" aria-label="Players in the room">
+      {players.map((p, i) => (
+        <li key={p.id} className="flex items-center gap-3 bg-surface rounded-xl px-3 py-1.5 border border-line/15 font-body">
+          <AvatarIcon avatarId={p.avatarId} size="sm" />
+          <span className="flex-1 font-bold text-ink">{p.nickname}</span>
+          {i === 0 && <span className="text-[10px] font-bold uppercase text-ink-muted">Host</span>}
+          {p.id === myId && i !== 0 && <span className="text-[10px] font-bold uppercase text-pokemon-blue">You</span>}
+        </li>
+      ))}
+      {spectators > 0 && (
+        <li className="text-center text-xs font-body text-ink-muted">
+          📺 {spectators} screen{spectators > 1 ? 's' : ''} watching
+        </li>
+      )}
+    </ul>
+  );
 
   const inviteUrl = code && typeof window !== 'undefined' ? `${window.location.origin}/?room=${code}` : '';
 
@@ -62,11 +82,11 @@ export default function RemoteLobby({ status, error, code, isHost, players, init
   if (inRoom && isHost) {
     return (
       <div className="flex flex-col items-center gap-4 w-full max-w-md mx-auto animate-fade-in">
-        <h2 className="font-pixel text-xs text-pokemon-dark">Your room</h2>
+        <h2 className="font-pixel text-xs text-ink">Your room</h2>
         {code ? (
           <div className="pokemon-card w-full">
             <div className="pokemon-card-body text-center space-y-3">
-              <p className="text-xs font-body text-gray-600">Tell your friend this code, or send the invite link</p>
+              <p className="text-xs font-body text-ink-muted">Share the code or invite link — up to {MAX_PLAYERS} players, plus a TV screen to watch</p>
               <p className="font-pixel text-2xl tracking-[0.3em] text-pokemon-blue select-all" aria-label={`Room code ${code.split('').join(' ')}`}>
                 {code}
               </p>
@@ -79,17 +99,9 @@ export default function RemoteLobby({ status, error, code, isHost, players, init
           <Spinner label="Opening a room…" />
         )}
 
-        <div className="w-full flex items-center gap-3 justify-center font-body" aria-live="polite">
-          {guest ? (
-            <>
-              <AvatarIcon avatarId={guest.avatarId} size="md" />
-              <span className="font-bold text-pokemon-dark">{guest.nickname} joined!</span>
-            </>
-          ) : status === 'reconnecting' ? (
-            <span className="text-sm text-gray-600">Your friend dropped out. Waiting for them to come back…</span>
-          ) : (
-            <span className="text-sm text-gray-600">Waiting for a friend to join…</span>
-          )}
+        <div className="w-full space-y-1" aria-live="polite">
+          {roster}
+          {players.length < 2 && <p className="text-sm text-center font-body text-ink-muted">Waiting for friends to join…</p>}
         </div>
 
         <GameSettingsForm settings={settings} onChange={setSettings} playerCount={Math.max(2, players.length)} />
@@ -98,7 +110,7 @@ export default function RemoteLobby({ status, error, code, isHost, players, init
           <PokeBallButton onClick={onBack} variant="gray" size="md" className="flex-1">
             Leave
           </PokeBallButton>
-          <PokeBallButton onClick={() => onStart(settings)} variant="red" size="lg" className="flex-1" disabled={!guest || status !== 'connected'}>
+          <PokeBallButton onClick={() => onStart(settings)} variant="red" size="lg" className="flex-1" disabled={players.length < 2}>
             Start battle!
           </PokeBallButton>
         </div>
@@ -110,16 +122,16 @@ export default function RemoteLobby({ status, error, code, isHost, players, init
     const host = players[0];
     return (
       <div className="flex flex-col items-center gap-5 w-full max-w-md mx-auto animate-fade-in text-center font-body">
-        <h2 className="font-pixel text-xs text-pokemon-dark">Room {code}</h2>
+        <h2 className="font-pixel text-xs text-ink">Room {code}</h2>
         {status === 'connecting' && <Spinner label="Connecting…" />}
         {status === 'reconnecting' && <Spinner label="Connection dropped. Reconnecting…" />}
         {status === 'connected' &&
           (host ? (
             <>
-              <div className="flex items-center gap-3">
-                <AvatarIcon avatarId={host.avatarId} size="lg" />
-                <p className="font-bold text-pokemon-dark">You&apos;re in {host.nickname}&apos;s room</p>
-              </div>
+              <p className="font-bold text-ink">
+                {myId === SPECTATOR_ID ? `📺 This screen is watching ${host.nickname}'s room` : `You're in ${host.nickname}'s room`}
+              </p>
+              {roster}
               <Spinner label={`Waiting for ${host.nickname} to start…`} />
             </>
           ) : (
@@ -199,6 +211,10 @@ export default function RemoteLobby({ status, error, code, isHost, players, init
           <PokeBallButton type="submit" variant="red" size="lg" className="w-full" disabled={!validCode || !nameOk}>
             Join room
           </PokeBallButton>
+          <PokeBallButton onClick={() => validCode && onJoin(validCode, 'TV', 1, true)} variant="blue" size="md" className="w-full" disabled={!validCode}>
+            📺 Watch on this screen (TV)
+          </PokeBallButton>
+          <p className="text-[11px] text-center font-body text-ink-muted -mt-1">For a laptop or TV everyone can see — no name needed</p>
           <PokeBallButton onClick={() => setMode('choose')} variant="gray" size="md" className="w-full">
             Back
           </PokeBallButton>
@@ -212,7 +228,7 @@ function Spinner({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center gap-2" role="status">
       <div className="w-8 h-8 border-4 border-pokemon-red border-t-transparent rounded-full animate-spin" aria-hidden />
-      <span className="text-sm text-gray-600 font-body">{label}</span>
+      <span className="text-sm text-ink-muted font-body">{label}</span>
     </div>
   );
 }
