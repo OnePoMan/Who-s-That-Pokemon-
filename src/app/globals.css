@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Fredoka:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -12,14 +11,27 @@
   --pokemon-gold: #DAA520;
   --pokemon-white: #FFFFFF;
   --pokemon-light-gray: #F5F5F5;
-  --pokemon-gray: #A0A0A0;
+  /* Dark enough for 4.5:1 contrast on the cream screen. */
+  --pokemon-gray: #6B6B6B;
   --pokemon-dark: #2B2B2B;
   --pokemon-black: #1A1A1A;
   --pokemon-cream: #FFF8E7;
   --background: #E8E0D0;
+  /* Semantic tokens: components use these so a theme can redefine them in one place. */
+  --surface: #FFFFFF;
+  --surface-2: #F3F4F6;
+  --ink: #2B2B2B;
+  --ink-muted: #5F5F5F;
+  --line: #2B2B2B;
   --foreground: #1A1A1A;
-  --font-pixel: 'Press Start 2P', monospace;
-  --font-body: 'Fredoka', system-ui, sans-serif;
+  --screen: #FFF8E7;
+  /* Coloured text that must stay readable on --surface. */
+  --accent: #3B4CCA;
+  --accent-red: #C8092A;
+  color-scheme: light;
+  /* Fonts are self-hosted by next/font (see layout.tsx). */
+  --font-pixel: var(--font-press-start), 'Press Start 2P', monospace;
+  --font-body: var(--font-fredoka), system-ui, sans-serif;
 }
 
 @theme inline {
@@ -39,10 +51,86 @@
   --color-pokemon-dark: var(--pokemon-dark);
   --color-pokemon-black: var(--pokemon-black);
   --color-pokemon-cream: var(--pokemon-cream);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
+  --color-screen: var(--screen);
+  --color-accent: var(--accent);
+  --color-accent-red: var(--accent-red);
+}
+
+/* ============================================
+   DARK THEME: follows the device unless chosen in settings (data-theme on <html>)
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0D0F16;
+    --screen: #171A24;
+    --surface: #232736;
+    --surface-2: #2E3345;
+    --ink: #ECEDF4;
+    --ink-muted: #A9ADBF;
+    --line: #8C92AB;
+    --foreground: #ECEDF4;
+    --accent: #9AA7FF;
+    --accent-red: #FF7589;
+    color-scheme: dark;
+    /* Tailwind's pastel tints become dark tints, and their dark text colours light ones. */
+    --color-red-50: #3A1A20;
+    --color-red-100: #4A1F27;
+    --color-blue-50: #1D2240;
+    --color-blue-100: #252C52;
+    --color-green-100: #173A24;
+    --color-yellow-50: #332D12;
+    --color-yellow-100: #3D3614;
+    --color-amber-100: #3D3014;
+    --color-orange-100: #3F2614;
+    --color-gray-200: #353A4C;
+    --color-green-700: #6FDC8C;
+    --color-green-800: #86E5A0;
+    --color-red-800: #FF9AA8;
+    --color-orange-700: #FFAE6B;
+    --color-amber-900: #FFD98A;
+    --color-yellow-900: #FFE58A;
+    --color-gray-700: #D4D6E0;
+  }
+}
+:root[data-theme="dark"] {
+  --background: #0D0F16;
+  --screen: #171A24;
+  --surface: #232736;
+  --surface-2: #2E3345;
+  --ink: #ECEDF4;
+  --ink-muted: #A9ADBF;
+  --line: #8C92AB;
+  --foreground: #ECEDF4;
+  --accent: #9AA7FF;
+  --accent-red: #FF7589;
+  color-scheme: dark;
+  --color-red-50: #3A1A20;
+  --color-red-100: #4A1F27;
+  --color-blue-50: #1D2240;
+  --color-blue-100: #252C52;
+  --color-green-100: #173A24;
+  --color-yellow-50: #332D12;
+  --color-yellow-100: #3D3614;
+  --color-amber-100: #3D3014;
+  --color-orange-100: #3F2614;
+  --color-gray-200: #353A4C;
+  --color-green-700: #6FDC8C;
+  --color-green-800: #86E5A0;
+  --color-red-800: #FF9AA8;
+  --color-orange-700: #FFAE6B;
+  --color-amber-900: #FFD98A;
+  --color-yellow-900: #FFE58A;
+  --color-gray-700: #D4D6E0;
 }
 
 body {
   background: var(--background);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   color: var(--foreground);
   font-family: var(--font-body);
   overflow-x: hidden;
@@ -78,21 +166,13 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.pokedex-frame::before {
-  content: '';
-  position: absolute;
-  top: 8px;
-  left: 12px;
-  display: flex;
-  gap: 6px;
-}
-
 .pokedex-screen {
-  background: var(--pokemon-cream);
+  background: var(--screen);
   border-radius: 16px;
   border: 3px solid var(--pokemon-dark);
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1);
   min-height: calc(100vh - 24px);
+  min-height: calc(100dvh - 24px);
   position: relative;
   overflow: hidden;
 }
@@ -154,8 +234,8 @@ body {
    POKEMON CARD STYLE CONTAINERS
    ============================================ */
 .pokemon-card {
-  background: white;
-  border: 3px solid var(--pokemon-dark);
+  background: var(--surface);
+  border: 3px solid var(--line);
   border-radius: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   overflow: hidden;
@@ -164,7 +244,7 @@ body {
 .pokemon-card-header {
   background: linear-gradient(135deg, var(--pokemon-blue) 0%, var(--pokemon-blue-light) 100%);
   padding: 8px 16px;
-  border-bottom: 2px solid var(--pokemon-dark);
+  border-bottom: 2px solid var(--line);
 }
 
 .pokemon-card-header.red {
@@ -179,7 +259,7 @@ body {
    POKEMON-STYLED TOGGLE BUTTONS
    ============================================ */
 .pokemon-toggle {
-  border: 2px solid var(--pokemon-dark);
+  border: 2px solid var(--line);
   border-radius: 9999px;
   font-family: var(--font-body);
   font-weight: 600;
@@ -195,12 +275,12 @@ body {
 }
 
 .pokemon-toggle:not(.active) {
-  background: white;
-  color: var(--pokemon-dark);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .pokemon-toggle:not(.active):hover {
-  background: var(--pokemon-light-gray);
+  background: var(--surface-2);
 }
 
 /* ============================================
@@ -208,11 +288,11 @@ body {
    ============================================ */
 .pokemon-input {
   font-family: var(--font-body);
-  border: 3px solid var(--pokemon-dark);
+  border: 3px solid var(--line);
   border-radius: 12px;
   padding: 10px 16px;
-  background: white;
-  color: var(--pokemon-dark);
+  background: var(--surface);
+  color: var(--ink);
   font-weight: 500;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -225,7 +305,7 @@ body {
 }
 
 .pokemon-input::placeholder {
-  color: var(--pokemon-gray);
+  color: var(--ink-muted);
   font-weight: 400;
 }
 
@@ -236,7 +316,7 @@ body {
   position: relative;
   width: 100%;
   height: 4px;
-  background: var(--pokemon-dark);
+  background: var(--line);
 }
 .pokeball-divider::after {
   content: '';
@@ -247,8 +327,8 @@ body {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 4px solid var(--pokemon-dark);
-  background: white;
+  border: 4px solid var(--line);
+  background: var(--surface);
 }
 
 /* ============================================
@@ -320,6 +400,163 @@ canvas {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--pokemon-gray);
+  background: var(--ink-muted);
   border-radius: 2px;
+}
+
+/* ============================================
+   SMALL PHONES: slimmer frame, more room to draw
+   ============================================ */
+@media (max-width: 420px) {
+  .pokedex-shell { padding: 0; }
+  .pokedex-frame { border-radius: 0; padding: 3px; }
+  .pokedex-lights { display: none; }
+  .pokedex-screen { border-radius: 10px; border-width: 2px; min-height: calc(100dvh - 6px); }
+}
+
+/* Yellow title with a dark outline so it stays readable on the cream screen. */
+.logo-yellow {
+  color: var(--pokemon-yellow);
+  text-shadow:
+    -2px -2px 0 var(--pokemon-dark), 2px -2px 0 var(--pokemon-dark),
+    -2px 2px 0 var(--pokemon-dark), 2px 2px 0 var(--pokemon-dark),
+    3px 3px 0 var(--pokemon-blue);
+}
+
+.pixelated {
+  image-rendering: pixelated;
+}
+
+:focus-visible {
+  outline: 3px solid var(--pokemon-blue);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.settings-legend {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--ink);
+}
+
+/* Short screens: a slimmer top bar leaves more room for the canvas. */
+@media (max-height: 700px) {
+  .pokedex-topbar { padding-top: 4px; padding-bottom: 4px; }
+}
+
+/* Reactions drift up and fade out. */
+@keyframes reaction-float {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  15% { transform: translateY(-20px) scale(1.1); opacity: 1; }
+  100% { transform: translateY(-220px) scale(1); opacity: 0; }
+}
+.reaction-float {
+  animation: reaction-float 2.5s ease-out forwards;
+}
+
+/* Drawing toolbar icon buttons. */
+.tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border-radius: 0.75rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  transition: background-color 0.15s, transform 0.1s;
+}
+.tool-button:hover:not(:disabled) { background: var(--surface-2); }
+.tool-button:active:not(:disabled) { transform: scale(0.94); }
+.tool-button:disabled { opacity: 0.35; }
+.tool-button.active {
+  background: var(--pokemon-blue);
+  border-color: var(--pokemon-blue);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(59, 76, 202, 0.4);
+}
+.tool-button.danger { color: var(--pokemon-red); }
+
+/* The "any colour" swatch shows a colour wheel. */
+.color-wheel {
+  background: conic-gradient(#ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+}
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Dark theme: the Poké Ball pattern shows light on the dark page. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pokeball-bg { filter: invert(1); }
+}
+:root[data-theme="dark"] .pokeball-bg { filter: invert(1); }
+
+/* ============================================
+   ANIME-STYLE REVEAL: blue burst behind the silhouette
+   ============================================ */
+.reveal-stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 4px solid var(--line);
+  background: radial-gradient(circle at 50% 50%, #9FE3FF 0%, #3FA9F5 38%, #1B5FC1 75%, #123E8A 100%);
+}
+.reveal-rays {
+  position: absolute;
+  inset: -50%;
+  z-index: -1;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.28) 0deg 7deg, rgba(255, 255, 255, 0) 7deg 20deg);
+  animation: reveal-spin 14s linear infinite;
+}
+.reveal-stage.revealed .reveal-rays {
+  background: repeating-conic-gradient(from 0deg, rgba(255, 236, 120, 0.45) 0deg 7deg, rgba(255, 255, 255, 0) 7deg 20deg);
+}
+@keyframes reveal-spin {
+  to { transform: rotate(360deg); }
+}
+.reveal-pokemon {
+  animation: reveal-zoom 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.reveal-stage.revealed .reveal-pokemon {
+  animation: reveal-pop 0.5s ease-out both;
+}
+@keyframes reveal-zoom {
+  from { transform: scale(0.2) rotate(-12deg); opacity: 0; }
+  to { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes reveal-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.reveal-flash {
+  position: absolute;
+  inset: 0;
+  background: white;
+  opacity: 0;
+  pointer-events: none;
+}
+.reveal-stage.revealed .reveal-flash {
+  animation: reveal-flash 0.6s ease-out;
+}
+@keyframes reveal-flash {
+  0% { opacity: 0.95; }
+  100% { opacity: 0; }
 }

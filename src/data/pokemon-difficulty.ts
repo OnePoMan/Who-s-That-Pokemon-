@@ -1,7 +1,5 @@
-import { ALL_ALTERNATE_FORM_IDS } from './pokemon-alternate-forms';
-
 // Easy: ~100 most universally recognizable Pokemon
-export const EASY_POKEMON_IDS: number[] = [
+const EASY_LIST: number[] = [
   // Gen 1 starters & evolutions
   1, 2, 3, 4, 5, 6, 7, 8, 9,
   // Pikachu line
@@ -36,8 +34,7 @@ export const EASY_POKEMON_IDS: number[] = [
 ];
 
 // Medium: ~300 recognizable Pokemon across all generations
-export const MEDIUM_POKEMON_IDS: number[] = [
-  ...EASY_POKEMON_IDS,
+const MEDIUM_EXTRA: number[] = [
   // Additional Gen 1
   10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
   27, 28, 29, 30, 31, 32, 33, 34, 36, 38, 40, 41, 42, 43, 44, 45,
@@ -57,17 +54,6 @@ export const MEDIUM_POKEMON_IDS: number[] = [
   292, 293, 295, 296, 297, 298, 299, 300, 301, 304, 306,
 ];
 
-export function getPokemonPool(difficulty: 'easy' | 'medium' | 'hard'): number[] {
-  switch (difficulty) {
-    case 'easy':
-      return EASY_POKEMON_IDS;
-    case 'medium':
-      return MEDIUM_POKEMON_IDS;
-    case 'hard': {
-      const baseIds = Array.from({ length: 1025 }, (_, i) => i + 1);
-      return [...baseIds, ...ALL_ALTERNATE_FORM_IDS];
-    }
-    default:
-      return EASY_POKEMON_IDS;
-  }
-}
+// Sets remove the duplicates the hand-written lists contained.
+export const EASY_POKEMON_IDS: readonly number[] = [...new Set(EASY_LIST)];
+export const MEDIUM_POKEMON_IDS: readonly number[] = [...new Set([...EASY_LIST, ...MEDIUM_EXTRA])];

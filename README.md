@@ -1,42 +1,86 @@
-# Who's That Pokemon? - Draw & Guess Edition
+# Who's That Pokémon? — Draw & Guess
 
-A multiplayer Pokemon drawing and guessing game built with Next.js 16, TypeScript, and Tailwind CSS.
+A drawing and guessing game for 2–8 players. One player gets a few seconds to memorize a Pokémon, then draws it from memory while everyone else guesses. It runs in the browser and can be installed on a phone's home screen.
 
-## How to Play
+## How to play
 
-1. **Choose a mode**: Local (pass the device) or Remote (WebRTC peer-to-peer)
-2. **Set up players**: Pick nicknames and avatars
-3. **Configure game**: Choose difficulty and timer duration
-4. **Draw phase**: The drawer sees a Pokemon for 5 seconds, then draws it from memory
-5. **Guess phase**: The guesser types guesses to identify the Pokemon
-6. **Score**: First to 3 correct guesses wins!
+**One phone.** Hand the phone to the drawer; everyone else looks away. The drawer taps *Show me*, memorizes the Pokémon, then starts drawing. A banner tells the guessers to look; they shout guesses or type one into the guess box under the canvas (a name dropdown appears after the first letter, and a correct pick ends the round). *…got it!* and *Skip* are there for shouted guesses. Everyone takes a turn drawing.
 
-## Features
+**Several phones.** One player taps *Play on several phones → Create a room* and shares the six-character code (or the invite link, which fills the code in); up to 8 players join with it. The drawer's strokes appear live on everyone's phone; guessers type a guess and pick a name from the dropdown, so spelling never decides the round, and can send quick emoji reactions. The drawer can also confirm a guess (choosing who got it) or give up. A player who drops out keeps their seat and can rejoin with the same code; new players can't join once a game has started.
 
-- Full drawing toolkit: pen, eraser, flood fill, undo/redo, color palette, brush sizes
-- 3 difficulty tiers pulling from PokeAPI (1000+ Pokemon)
-- Pokemon silhouette reveal animation
-- Local multiplayer (pass-the-device) with privacy screens
-- Remote multiplayer via WebRTC data channels (no server needed)
-- Synthesized sound effects using Web Audio API
-- PWA-ready with manifest
-- Mobile-optimized with touch drawing support
-- Responsive design with Pokemon-themed UI
+**TV / big screen.** Open the site on a laptop or smart-TV browser, enter the room code and choose *Watch on this screen*. It shows the live drawing, timer, hints, guesses, reactions, reveal and scores for everyone in the room, and never receives the answer early. Up to 4 screens can watch.
 
-## Getting Started
+**Daily challenge.** One Pokémon a day, the same for everyone: 10 seconds to memorize it, 90 seconds to draw it from memory, one try. Share a spoiler-free card of your drawing to see if friends can guess it, and keep your daily streak going.
+
+**Solo practice.** Pick a difficulty and filters, then draw at your own pace with no timer and compare with the official artwork.
+
+**Pokédex, stats and badges.** Every drawing made or watched on the phone — in games, the daily and solo practice — is saved to its Pokédex (all 1,175 Pokémon and forms, filterable by generation and type), where you can see, save, share or delete each one. The Stats tab tracks games, rounds guessed, streaks, most-drawn Pokémon and more, and there are 17 badges to earn.
+
+After each round the answer is revealed anime-style — a silhouette over a blue burst that flashes into the official artwork, with the Pokémon's cry — with a timelapse replay and a share card. Every drawing from the session is in the gallery (settings menu, or at the end of the game) to download or share.
+
+**Scoring.** With two players, the guesser scores a point for a correct guess and the first to 3/5/7 points wins. With three or more, the first player to guess and the drawer each score a point (on a shared phone you tap who got it), everyone draws the same number of times (1–3 turns each), and the highest score wins; ties share the win.
+
+**Drawing tools:** pen (pressure-sensitive with a stylus), eraser, fill, line, rectangle, circle, eyedropper, any custom colour (recent colours are remembered), four brush sizes, undo/redo and clear. Pinch with two fingers (or Ctrl/⌘ + scroll) to zoom in for detail; guessers and the TV screen can zoom too.
+
+**Hints** (on by default): letter blanks from the start, the Pokémon's type and generation at the halfway mark, and its first letter with 15 seconds left.
+
+**Settings** (lobby): difficulty, generation and type filters (with a live count of matching Pokémon), drawing time (30/60/90 s), memorize time (5/10/15 s), winning score or turns each, whether the drawer sees the picture or only the name, and hints on/off. **Device settings** (gear icon): music and sound-effect volume, Pokémon cries, vibration, light/dark theme (follows the device by default) and the how-to-play guide, which also opens on the first visit.
+
+Difficulty: *Easy* is ~160 well-known Pokémon, *Medium* ~370, *Hard* all 1,025 plus 150 Mega, Primal and regional forms (Alolan, Galarian, Hisuian, Paldean).
+
+## Development
 
 ```bash
 npm install
-npm run dev
+npm run dev          # http://localhost:3000
+npm test             # unit tests (Vitest)
+npm run lint
+npm run typecheck
+npm run build
 ```
 
-Open http://localhost:3000 to play.
+Requires Node 20.9+. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests, build and `npm audit` on every pull request.
 
-## Tech Stack
+### Data and assets
 
-- Next.js 16 (App Router, Turbopack)
-- TypeScript
-- Tailwind CSS 4
-- PokeAPI for Pokemon data
-- WebRTC for peer-to-peer multiplayer
-- Web Audio API for sound effects
+- `src/data/pokemon-index.json` — every species' English name and every included alternate form, with IDs verified against PokéAPI. Regenerate with `npm run generate:pokemon` (network required).
+- `src/data/pokemon-difficulty.ts` — the curated Easy and Medium lists.
+- `public/icons`, `src/app/icon.png`, `src/app/apple-icon.png` — generated by `npm run generate:icons`.
+- Official artwork is loaded at play time from the [PokeAPI sprites](https://github.com/PokeAPI/sprites) repository and cached by the service worker; cries stream from the [PokeAPI cries](https://github.com/PokeAPI/cries) repository.
+
+### Two-phone play
+
+Phones find each other through [PeerJS](https://peerjs.com)'s free public server, then talk directly over WebRTC (PeerJS's free relay is used when a direct connection is blocked). No account or server of your own is needed. To use your own PeerJS server instead (`npx peer --port 9000`), set:
+
+```
+NEXT_PUBLIC_PEER_HOST=peer.example.com
+NEXT_PUBLIC_PEER_PORT=443
+NEXT_PUBLIC_PEER_PATH=/
+NEXT_PUBLIC_PEER_SECURE=true
+```
+
+The page's Content-Security-Policy follows these settings automatically.
+
+**Privacy.** There are no accounts, analytics or server-side storage; drawings, stats and the Pokédex stay on the players' phones (browser storage), and can be deleted from the Pokédex's Stats tab. Two-phone play does expose network details the way any peer-to-peer game does: the PeerJS server and Google's STUN server see each player's IP address and the room code, and the two players' phones learn each other's IP address. Game data travels encrypted (WebRTC DTLS), including when it passes through the relay. Only share room codes with people you know. Self-hosting the PeerJS server (and a TURN server) removes the third parties.
+
+### Security
+
+- Everything received from the other phone is validated (`src/lib/net/protocol.ts`) and rate limited; the host decides every outcome, so a modified client can't score for itself or see the answer early. Guesses are limited to about one per second and 30 per round.
+- Drawings are capped (60 fills, 1,000 operations, 20,000 points) and undo/redo/fill are paced, so a hostile peer can't freeze the other phone.
+- Rooms hold up to 8 players and 4 watching screens; unidentified connections are dropped after 5 seconds; a rejoining guest checks it is talking to the same host.
+- Content-Security-Policy and other security headers are set in `next.config.ts`.
+
+## Project layout
+
+```
+src/app/            layout, manifest, icons, global styles
+src/components/     screens (Lobby, RemoteLobby, MemorizePhase, DrawingPhase, RevealPhase, SoloPlay, PokedexScreen, …)
+src/hooks/          useRoom (PeerJS), useSound (Web Audio), usePrefs, useProgress, device helpers
+src/lib/            game-state (reducer), canvas-engine, pokedex, hints, daily, stats, collection (IndexedDB), net/protocol, share, prefs
+public/sw.js        offline service worker
+scripts/            data and icon generators
+```
+
+## Credits and disclaimer
+
+Unofficial fan project, not affiliated with or endorsed by Nintendo, Game Freak or The Pokémon Company. Pokémon and all related names and artwork are trademarks of their respective owners. Pokémon data from [PokéAPI](https://pokeapi.co). Trainer sprites from the [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/trainers/) sprite collection, credited to their respective artists. Because of the trademarks involved, this is intended to be shared as an installable web app rather than published to an app store.
