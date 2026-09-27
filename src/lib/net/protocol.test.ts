@@ -72,8 +72,22 @@ describe('validateMessage', () => {
     expect(msg).toEqual({ t: 'draw', e: { type: 'stroke-start', x: 10, y: 10, color: '#000000', size: 4, p: undefined } });
   });
 
-  it('rejects state that points artwork at another host', () => {
-    const bad = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, artworkUrl: 'https://evil.example/x.png' } }, 'p1', 0);
+  it('ignores names and artwork URLs sent by the other phone', () => {
+    const tampered = toWire(
+      { ...state, currentPokemon: { id: 25, name: 'Totally Pikachu', artworkUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/../../evil/x.png' } },
+      'p1',
+      0,
+    );
+    const msg = validateMessage({ t: 'state', state: tampered });
+    expect(msg?.t === 'state' && msg.state.currentPokemon).toEqual({
+      id: 25,
+      name: 'Pikachu',
+      artworkUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png',
+    });
+  });
+
+  it('rejects unknown Pokémon IDs', () => {
+    const bad = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, id: 99999 } }, 'p1', 0);
     expect(validateMessage({ t: 'state', state: bad })).toBeNull();
   });
 

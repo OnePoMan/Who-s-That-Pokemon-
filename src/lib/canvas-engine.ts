@@ -4,11 +4,20 @@
 // Everything drawn is kept as a list of operations. Undo/redo drop or restore an operation and
 // redraw from the list, which costs far less memory than keeping a full bitmap per step, and the
 // same list replays a drawing for the reveal-screen timelapse or a reconnecting player.
+//
+// Drawings can arrive from the other phone, so their size is capped. The caps depend only on
+// the event sequence, so both phones always agree on what was accepted. A fill scans the canvas
+// once and remembers the pixel spans it painted; redraws repaint those spans instead of scanning
+// again, which keeps undo and replay cheap however many fills there are.
 
 export const CANVAS_SIZE = 600;
 export const MAX_BRUSH = 48;
-const MAX_POINTS_PER_STROKE = 5000;
-const MAX_OPS = 3000;
+const MAX_POINTS_PER_STROKE = 2000;
+const MAX_POINTS_TOTAL = 20000;
+const MAX_OPS = 1000;
+const MAX_FILLS = 60;
+/** Pointer samples closer than this (logical px) to the previous one add nothing visible. */
+const MIN_POINT_DISTANCE = 1.5;
 const FILL_TOLERANCE = 48;
 const BACKGROUND = '#FFFFFF';
 
@@ -25,7 +34,7 @@ type Point = [x: number, y: number, pressure: number];
 
 type Op =
   | { kind: 'stroke'; color: string; size: number; points: Point[] }
-  | { kind: 'fill'; x: number; y: number; color: string }
+  | { kind: 'fill'; x: number; y: number; color: string; spans?: Int32Array }
   | { kind: 'clear' };
 
 export type Tool = 'pen' | 'eraser' | 'fill';
@@ -38,6 +47,8 @@ export class CanvasManager {
   private redoStack: Op[] = [];
   private activeStroke: Extract<Op, { kind: 'stroke' }> | null = null;
   private timeline: DrawEvent[] = [];
+  private pointCount = 0;
+  private fillCount = 0;
   private color = '#000000';
   private size = 4;
   private tool: Tool = 'pen';
@@ -94,6 +105,8 @@ export class CanvasManager {
     this.emit({ type: 'stroke-start', x, y, color, size, ...(pressure !== undefined && { p: pressure }) });
   }
   extendStroke(x: number, y: number, pressure?: number) {
+    const last = this.activeStroke?.points.at(-1);
+    if (last && Math.hypot(x - last[0], y - last[1]) < MIN_POINT_DISTANCE) return;
     if (this.activeStroke) this.emit({ type: 'stroke-move', x, y, ...(pressure !== undefined && { p: pressure }) });
   }
   finishStroke() {
@@ -119,8 +132,9 @@ export class CanvasManager {
 
   // ---- Applying events (local or remote) ------------------------------------------------------
 
-  applyEvent(event: DrawEvent) {
-    if (this.ops.length >= MAX_OPS && (event.type === 'stroke-start' || event.type === 'fill')) return;
+  /** Applies an event; returns false if it was rejected by a cap. */
+  applyEvent(event: DrawEvent): boolean {
+    if (!this.accepts(event)) return false;
     this.timeline.push(event);
     switch (event.type) {
       case 'stroke-start': {
@@ -130,6 +144,7 @@ export class CanvasManager {
           size: event.size,
           points: [[event.x, event.y, event.p ?? 0.5]],
         };
+        this.pointCount++;
         this.ops.push(this.activeStroke);
         this.redoStack = [];
         this.drawStrokeTail(this.activeStroke);
@@ -137,8 +152,9 @@ export class CanvasManager {
       }
       case 'stroke-move': {
         const stroke = this.activeStroke;
-        if (!stroke || stroke.points.length >= MAX_POINTS_PER_STROKE) return;
+        if (!stroke) return false;
         stroke.points.push([event.x, event.y, event.p ?? 0.5]);
+        this.pointCount++;
         this.drawStrokeTail(stroke);
         break;
       }
@@ -150,7 +166,8 @@ export class CanvasManager {
       }
       case 'fill': {
         this.activeStroke = null;
-        const op: Op = { kind: 'fill', x: event.x, y: event.y, color: event.color };
+        const op: Extract<Op, { kind: 'fill' }> = { kind: 'fill', x: event.x, y: event.y, color: event.color };
+        this.fillCount++;
         this.ops.push(op);
         this.redoStack = [];
         this.renderFill(op);
@@ -181,6 +198,26 @@ export class CanvasManager {
         break;
       }
     }
+    return true;
+  }
+
+  private accepts(event: DrawEvent): boolean {
+    switch (event.type) {
+      case 'stroke-start':
+        return this.ops.length < MAX_OPS && this.pointCount < MAX_POINTS_TOTAL;
+      case 'stroke-move':
+        return (
+          this.activeStroke !== null &&
+          this.activeStroke.points.length < MAX_POINTS_PER_STROKE &&
+          this.pointCount < MAX_POINTS_TOTAL
+        );
+      case 'fill':
+        return this.ops.length < MAX_OPS && this.fillCount < MAX_FILLS;
+      case 'clear':
+        return this.ops.length < MAX_OPS;
+      default:
+        return true;
+    }
   }
 
   /** Every event applied so far, in order; enough to rebuild the drawing elsewhere. */
@@ -195,6 +232,8 @@ export class CanvasManager {
   }
 
   reset() {
+    this.pointCount = 0;
+    this.fillCount = 0;
     this.ops = [];
     this.redoStack = [];
     this.timeline = [];
@@ -231,8 +270,10 @@ export class CanvasManager {
   private renderOp(op: Op) {
     if (op.kind === 'clear') this.paintBackground();
     else if (op.kind === 'fill') this.renderFill(op);
-    else {
-      // Replaying a whole stroke draws it the same way live input did, one segment at a time.
+    else if (op.points.length > 1 && op.points.every((pt) => pt[2] === op.points[0][2])) {
+      this.strokeWholePath(op);
+    } else {
+      // Pressure varies along the stroke: draw it segment by segment, as live input did.
       const full = op.points;
       const partial = { ...op, points: [] as Point[] };
       for (const pt of full) {
@@ -241,6 +282,27 @@ export class CanvasManager {
       }
       this.drawStrokeEnd(op);
     }
+  }
+
+  // Same curve as drawStrokeTail/drawStrokeEnd, stroked as one path: much faster for replays.
+  private strokeWholePath(stroke: Extract<Op, { kind: 'stroke' }>) {
+    const { ctx } = this;
+    const pts = stroke.points;
+    ctx.strokeStyle = stroke.color;
+    ctx.lineWidth = this.width(stroke.size, pts[0][2]);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) {
+      const [x1, y1] = pts[i - 1];
+      const [x2, y2] = pts[i];
+      if (i === 1) ctx.lineTo((x1 + x2) / 2, (y1 + y2) / 2);
+      else ctx.quadraticCurveTo(x1, y1, (x1 + x2) / 2, (y1 + y2) / 2);
+    }
+    const [lx, ly] = pts[pts.length - 1];
+    ctx.lineTo(lx, ly);
+    ctx.stroke();
   }
 
   private width(size: number, pressure: number) {
@@ -293,6 +355,15 @@ export class CanvasManager {
   private renderFill(op: Extract<Op, { kind: 'fill' }>) {
     const fill = hexToRgb(op.color);
     if (!fill) return;
+    if (op.spans) {
+      // Repaint the remembered spans: identical pixels, no scan.
+      const { ctx } = this;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = op.color;
+      for (let i = 0; i < op.spans.length; i += 3) ctx.fillRect(op.spans[i + 1], op.spans[i], op.spans[i + 2] - op.spans[i + 1] + 1, 1);
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      return;
+    }
     const w = this.canvas.width;
     const h = this.canvas.height;
     const sx = Math.floor(op.x * this.dpr);
@@ -305,9 +376,11 @@ export class CanvasManager {
     const start = (sy * w + sx) * 4;
     const tr = data[start], tg = data[start + 1], tb = data[start + 2];
     if (tr === fill.r && tg === fill.g && tb === fill.b) {
+      op.spans = new Int32Array(0);
       this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       return;
     }
+    const spans: number[] = [];
 
     const matches = (i: number) =>
       Math.abs(data[i] - tr) <= FILL_TOLERANCE &&
@@ -322,6 +395,7 @@ export class CanvasManager {
       while (x > 0 && !done[y * w + x - 1] && matches((y * w + x - 1) * 4)) x--;
       let spanAbove = false;
       let spanBelow = false;
+      const spanStart = x;
       for (; x < w; x++) {
         const idx = y * w + x;
         if (done[idx] || !matches(idx * 4)) break;
@@ -344,7 +418,9 @@ export class CanvasManager {
           spanBelow = ok;
         }
       }
+      if (x > spanStart) spans.push(y, spanStart, x - 1);
     }
+    op.spans = Int32Array.from(spans);
 
     this.ctx.putImageData(image, 0, 0);
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);

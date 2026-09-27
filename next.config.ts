@@ -4,7 +4,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 // Artwork comes from the PokeAPI sprite repository; rooms are brokered by the public PeerJS
 // server. The game itself travels over WebRTC, which CSP does not govern.
-const ARTWORK = 'https://raw.githubusercontent.com';
+const ARTWORK = 'https://raw.githubusercontent.com/PokeAPI/sprites/';
 const PEER_BROKER = (() => {
   const host = process.env.NEXT_PUBLIC_PEER_HOST;
   if (!host) return 'https://0.peerjs.com wss://0.peerjs.com';
@@ -21,7 +21,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: ${ARTWORK}`,
   "font-src 'self'",
-  `connect-src 'self' ${PEER_BROKER} ${ARTWORK}${isDev ? ' ws: http://localhost:*' : ''}`,
+  `connect-src 'self' ${PEER_BROKER}${isDev ? ' ws: http://localhost:*' : ''}`,
   "worker-src 'self'",
   "manifest-src 'self'",
   "media-src 'none'",
@@ -39,7 +39,7 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000' },
   {
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), screen-wake-lock=(self)',

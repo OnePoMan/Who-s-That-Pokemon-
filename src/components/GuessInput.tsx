@@ -21,7 +21,7 @@ export default function GuessInput({ onGuess, disabled = false }: GuessInputProp
   const listId = useId();
   // Slightly longer than the host's per-guess cooldown, so a quick second guess waits in the
   // box instead of being dropped. The input stays enabled so the phone keyboard stays open.
-  const lastSubmitRef = useRef(0);
+  const lastSubmitRef = useRef(-Infinity);
   const suggestions = useMemo(() => searchPokemonNames(text, 8), [text]);
   const showList = open && suggestions.length > 0 && !disabled;
 

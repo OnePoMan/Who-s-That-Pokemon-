@@ -47,6 +47,15 @@ NEXT_PUBLIC_PEER_SECURE=true
 
 The page's Content-Security-Policy follows these settings automatically.
 
+**Privacy.** There are no accounts, analytics or server-side storage; drawings stay on the players' phones. Two-phone play does expose network details the way any peer-to-peer game does: the PeerJS server and Google's STUN server see each player's IP address and the room code, and the two players' phones learn each other's IP address. Game data travels encrypted (WebRTC DTLS), including when it passes through the relay. Only share room codes with people you know. Self-hosting the PeerJS server (and a TURN server) removes the third parties.
+
+### Security
+
+- Everything received from the other phone is validated (`src/lib/net/protocol.ts`) and rate limited; the host decides every outcome, so a modified client can't score for itself or see the answer early. Guesses are limited to about one per second and 30 per round.
+- Drawings are capped (60 fills, 1,000 operations, 20,000 points) and undo/redo/fill are paced, so a hostile peer can't freeze the other phone.
+- Rooms accept one guest; unidentified connections are dropped after 5 seconds; a rejoining guest checks it is talking to the same host.
+- Content-Security-Policy and other security headers are set in `next.config.ts`.
+
 ## Project layout
 
 ```

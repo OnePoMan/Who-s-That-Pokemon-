@@ -19,6 +19,8 @@ const COLORS: { hex: string; name: string }[] = [
 ];
 
 const SIZES = [2, 4, 8, 16];
+// Matches the rate the other phone accepts (see Game.tsx), so both canvases stay identical.
+const MIN_ACTION_GAP_MS = 250;
 
 interface DrawingCanvasProps {
   onDrawEvent?: (event: DrawEvent) => void;
@@ -46,6 +48,12 @@ export default function DrawingCanvas({
   const [size, setSize] = useState(4);
   const [tool, setTool] = useState<Tool>('pen');
   const [history, setHistory] = useState({ canUndo: false, canRedo: false });
+  const lastActionAt = useRef(-Infinity);
+  const paced = (e: { timeStamp: number }) => {
+    if (e.timeStamp - lastActionAt.current < MIN_ACTION_GAP_MS) return false;
+    lastActionAt.current = e.timeStamp;
+    return true;
+  };
 
   useEffect(() => {
     onDrawEventRef.current = onDrawEvent;
@@ -64,6 +72,7 @@ export default function DrawingCanvas({
     if (readOnly) return;
 
     let activePointer: number | null = null;
+    let lastFillAt = -Infinity;
     let penActive = false;
 
     const pressureOf = (e: PointerEvent) => (e.pointerType === 'pen' ? e.pressure : undefined);
@@ -75,7 +84,10 @@ export default function DrawingCanvas({
       e.preventDefault();
       const { x, y } = manager.toLogical(e.clientX, e.clientY);
       if (manager.currentTool === 'fill') {
-        manager.fillAt(x, y);
+        if (e.timeStamp - lastFillAt >= MIN_ACTION_GAP_MS) {
+          lastFillAt = e.timeStamp;
+          manager.fillAt(x, y);
+        }
         return;
       }
       activePointer = e.pointerId;
@@ -164,7 +176,7 @@ export default function DrawingCanvas({
             <div className="w-px bg-gray-300 mx-0.5" aria-hidden />
             <button
               type="button"
-              onClick={() => managerRef.current?.undo()}
+              onClick={(e) => paced(e) && managerRef.current?.undo()}
               disabled={!history.canUndo}
               className="pokemon-toggle px-3 py-1.5 text-xs font-body disabled:opacity-40"
             >
@@ -172,7 +184,7 @@ export default function DrawingCanvas({
             </button>
             <button
               type="button"
-              onClick={() => managerRef.current?.redo()}
+              onClick={(e) => paced(e) && managerRef.current?.redo()}
               disabled={!history.canRedo}
               className="pokemon-toggle px-3 py-1.5 text-xs font-body disabled:opacity-40"
             >
@@ -180,7 +192,7 @@ export default function DrawingCanvas({
             </button>
             <button
               type="button"
-              onClick={() => managerRef.current?.clear()}
+              onClick={(e) => paced(e) && managerRef.current?.clear()}
               className="px-3 py-1.5 rounded-full text-xs font-bold font-body bg-pokemon-red text-white border-2 border-pokemon-red-dark hover:bg-pokemon-red-dark transition-colors"
             >
               Clear

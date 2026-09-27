@@ -18,7 +18,7 @@ import { useNow, useWakeLock } from '@/hooks/useDeviceHelpers';
 import { vibrate } from '@/lib/prefs';
 import { isCorrectGuess, pickRandomPokemon } from '@/lib/pokedex';
 import { composeComparison, safeFilename, shareOrDownload } from '@/lib/share';
-import { fromWire, normalizeRoomCode, toWire, type Intent, type Message } from '@/lib/net/protocol';
+import { fromWire, normalizeRoomCode, randomString, toWire, type Intent, type Message } from '@/lib/net/protocol';
 import type { CanvasManager, DrawEvent } from '@/lib/canvas-engine';
 import {
   gameReducer,
@@ -37,6 +37,11 @@ const GUEST_ID = 'p2';
 
 // Faster than anyone types, slow enough that a modified client can't try every name.
 const GUESS_COOLDOWN_MS = 1200;
+const MAX_GUESSES_PER_ROUND = 30;
+// Limits on what the other phone can make this one redraw.
+const MAX_HISTORY_EVENTS_PER_SECOND = 4; // undo / redo / clear; the drawer's buttons match this pace
+const MAX_FILLS_PER_SECOND = 4; // each fill scans the whole canvas once
+const MAX_CANVAS_SYNCS_PER_ROUND = 3;
 
 const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -59,6 +64,12 @@ export default function Game() {
   const stateRef = useRef<GameState>(state);
   const sentCanvasRef = useRef(false);
   const lastGuessAtRef = useRef<Record<string, number>>({});
+  const guessCountRef = useRef({ round: 0, count: 0 });
+  const historyWindowRef = useRef({ start: 0, count: 0 });
+  const fillWindowRef = useRef({ start: 0, count: 0 });
+  const canvasSyncsRef = useRef({ round: 0, count: 0 });
+  const hostTokenRef = useRef<string | null>(null);
+  const [hostMismatch, setHostMismatch] = useState(false);
   // Read by the message handler, which is created before the room hook it is passed to.
   const roomRef = useRef<{ isHost: boolean; send: (msg: Message) => void } | null>(null);
   const myIdRef = useRef(HOST_ID);
@@ -76,7 +87,6 @@ export default function Game() {
   useEffect(() => {
     const code = normalizeRoomCode(new URLSearchParams(window.location.search).get('room') ?? '');
     if (!code) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInviteCode(code);
     setScreen('remote');
     window.history.replaceState(null, '', window.location.pathname);
@@ -146,6 +156,8 @@ export default function Game() {
       const nowMs = Date.now();
       if (nowMs - (lastGuessAtRef.current[byId] ?? 0) < GUESS_COOLDOWN_MS) return;
       lastGuessAtRef.current[byId] = nowMs;
+      if (guessCountRef.current.round !== s.round) guessCountRef.current = { round: s.round, count: 0 };
+      if (++guessCountRef.current.count > MAX_GUESSES_PER_ROUND) return;
       const correct = isCorrectGuess(text, s.currentPokemon.name);
       dispatch({
         type: 'ADD_CHAT_MESSAGE',
@@ -171,7 +183,8 @@ export default function Game() {
           const guest: Player = { id: GUEST_ID, nickname: msg.name, avatarId: msg.avatarId, score: 0 };
           const players = [host, guest];
           setLobbyPlayers(players);
-          roomRef.current?.send({ t: 'lobby', players, youId: GUEST_ID });
+          hostTokenRef.current ??= randomString(24);
+          roomRef.current?.send({ t: 'lobby', players, youId: GUEST_ID, hostToken: hostTokenRef.current });
           if (s.phase !== 'LOBBY') {
             // A returning guest: bring them back up to date, including the drawing so far.
             roomRef.current?.send({ t: 'state', state: toWire(s, GUEST_ID, Date.now()) });
@@ -183,6 +196,12 @@ export default function Game() {
         }
         case 'lobby':
           if (hosting) return;
+          // After a reconnect, only the host we first met may carry on the game.
+          if (hostTokenRef.current && hostTokenRef.current !== msg.hostToken) {
+            setHostMismatch(true);
+            return;
+          }
+          hostTokenRef.current = msg.hostToken;
           setLobbyPlayers(msg.players);
           setMyId(msg.youId);
           myIdRef.current = msg.youId;
@@ -197,6 +216,9 @@ export default function Game() {
           }
           if (next.phase === 'MEMORIZE' && next.round === 1 && s.round !== 1) setDrawings({});
           dispatch({ type: 'REPLACE', state: next });
+          // Messages that follow straight away (e.g. the canvas snapshot after a reconnect)
+          // must see this state, not the one from the last render.
+          stateRef.current = next;
           // Back from a dropped connection mid-drawing: resend my strokes to the host.
           const drawerNow = next.players[next.currentDrawerIndex]?.id === myIdRef.current;
           if (next.phase === 'DRAWING' && drawerNow && !sentCanvasRef.current && canvasRef.current) {
@@ -211,13 +233,23 @@ export default function Game() {
         case 'guess':
           if (hosting) performGuess(msg.text, GUEST_ID);
           return;
-        case 'draw':
+        case 'draw': {
           if (s.phase !== 'DRAWING' || iAmDrawer) return;
+          const limited = msg.e.type === 'fill' ? fillWindowRef : ['undo', 'redo', 'clear'].includes(msg.e.type) ? historyWindowRef : null;
+          if (limited) {
+            const now = Date.now();
+            if (now - limited.current.start > 1000) limited.current = { start: now, count: 0 };
+            const cap = msg.e.type === 'fill' ? MAX_FILLS_PER_SECOND : MAX_HISTORY_EVENTS_PER_SECOND;
+            if (++limited.current.count > cap) return;
+          }
           remoteStrokesRef.current.push(msg.e);
           canvasRef.current?.applyEvent(msg.e);
           return;
+        }
         case 'canvas':
           if (s.phase !== 'DRAWING' || iAmDrawer || msg.round !== s.round) return;
+          if (canvasSyncsRef.current.round !== s.round) canvasSyncsRef.current = { round: s.round, count: 0 };
+          if (++canvasSyncsRef.current.count > MAX_CANVAS_SYNCS_PER_ROUND) return;
           remoteStrokesRef.current = msg.events;
           canvasRef.current?.loadTimeline(msg.events);
           return;
@@ -353,7 +385,15 @@ export default function Game() {
     setConfirmHome(false);
     setMyId(HOST_ID);
     myIdRef.current = HOST_ID;
+    hostTokenRef.current = null;
   }, [room, sound]);
+
+  useEffect(() => {
+    if (!hostMismatch) return;
+    goHome();
+    setHostMismatch(false);
+    setNotice('Disconnected: the room was taken over by a different host.');
+  }, [hostMismatch, goHome]);
 
   const requestHome = () => {
     if (state.phase === 'LOBBY' || state.phase === 'GAME_OVER') goHome();

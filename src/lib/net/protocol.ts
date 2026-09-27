@@ -2,6 +2,7 @@
 // guest sends intents and renders the state the host sends back. Anything arriving from the
 // other device is untrusted, so each message is validated before it is used.
 import { CANVAS_SIZE, MAX_BRUSH, type DrawEvent } from '../canvas-engine';
+import { getPokemon } from '../pokedex';
 import {
   DIFFICULTIES,
   MEMORIZE_OPTIONS,
@@ -23,7 +24,7 @@ export const ROOM_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const ROOM_CODE_LENGTH = 6;
 export const MAX_NAME_LENGTH = 16;
 export const MAX_GUESS_LENGTH = 40;
-export const MAX_TIMELINE_EVENTS = 60000;
+export const MAX_TIMELINE_EVENTS = 25000;
 
 export type Intent = 'begin-drawing' | 'correct' | 'skip' | 'next-round' | 'rematch';
 const INTENTS: readonly Intent[] = ['begin-drawing', 'correct', 'skip', 'next-round', 'rematch'];
@@ -33,7 +34,8 @@ export type WireState = Omit<GameState, 'phaseEndsAt'> & { remainingMs: number |
 
 export type Message =
   | { t: 'hello'; v: number; clientId: string; name: string; avatarId: number }
-  | { t: 'lobby'; players: Player[]; youId: string }
+  // hostToken lets a reconnecting guest tell the real host from someone who took over the code.
+  | { t: 'lobby'; players: Player[]; youId: string; hostToken: string }
   | { t: 'reject'; reason: 'full' | 'version' }
   | { t: 'state'; state: WireState }
   | { t: 'intent'; intent: Intent }
@@ -41,10 +43,21 @@ export type Message =
   | { t: 'draw'; e: DrawEvent }
   | { t: 'canvas'; round: number; events: DrawEvent[] };
 
-export function generateRoomCode(random: () => number = Math.random): string {
-  let code = '';
-  for (let i = 0; i < ROOM_CODE_LENGTH; i++) code += ROOM_ALPHABET[Math.floor(random() * ROOM_ALPHABET.length)];
-  return code;
+/** Cryptographically random, so codes can't be predicted from earlier ones. */
+export function generateRoomCode(): string {
+  return randomString(ROOM_CODE_LENGTH);
+}
+
+export function randomString(length: number, alphabet = ROOM_ALPHABET): string {
+  // Rejection sampling keeps every character equally likely.
+  const limit = 256 - (256 % alphabet.length);
+  let out = '';
+  while (out.length < length) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(length * 2))) {
+      if (byte < limit && out.length < length) out += alphabet[byte % alphabet.length];
+    }
+  }
+  return out;
 }
 
 export function normalizeRoomCode(input: string): string | null {
@@ -126,12 +139,11 @@ function validatePlayer(p: unknown): Player | null {
   return { id, nickname, avatarId: p.avatarId, score: p.score };
 }
 
+// Only the ID is trusted: the name and artwork URL come from this device's own Pokédex, so the
+// other phone can't make it load an arbitrary image or show an arbitrary name.
 function validatePokemon(p: unknown): PokemonData | null {
   if (!isObj(p) || !isInt(p.id, 1, 99999)) return null;
-  const name = cleanText(p.name, 60);
-  // Only accept artwork from the one host the app loads it from.
-  const url = typeof p.artworkUrl === 'string' && p.artworkUrl.startsWith('https://raw.githubusercontent.com/PokeAPI/sprites/') ? p.artworkUrl : null;
-  return name && url ? { id: p.id, name, artworkUrl: url } : null;
+  return getPokemon(p.id);
 }
 
 function validateSettings(s: unknown): GameSettings | null {
@@ -224,7 +236,8 @@ export function validateMessage(raw: unknown): Message | null {
     case 'lobby': {
       const players = validateArray(raw.players, 2, validatePlayer);
       const youId = cleanText(raw.youId, 64);
-      return players && youId ? { t: 'lobby', players, youId } : null;
+      const hostToken = cleanText(raw.hostToken, 64);
+      return players && youId && hostToken ? { t: 'lobby', players, youId, hostToken } : null;
     }
     case 'reject':
       return oneOf(raw.reason, ['full', 'version'] as const) ? { t: 'reject', reason: raw.reason } : null;

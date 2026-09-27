@@ -3,10 +3,12 @@
 // - Build assets, icons and trainer sprites: cache first (their URLs are versioned or fixed).
 // - Official artwork: cache first, capped so the cache cannot grow without bound.
 // Everything else (including the matchmaking server) always goes to the network.
+// Bump when icons or trainer sprites change; build assets are versioned by their URLs.
 const VERSION = 'v1';
 const APP_CACHE = `app-${VERSION}`;
 const ART_CACHE = `art-${VERSION}`;
 const MAX_ART_ENTRIES = 400;
+const MAX_APP_ENTRIES = 250; // old builds' assets age out instead of piling up
 const ARTWORK_PREFIX = 'https://raw.githubusercontent.com/PokeAPI/sprites/';
 
 const TRAINERS = [
@@ -36,7 +38,8 @@ self.addEventListener('activate', (event) => {
 
 async function trim(cacheName, max) {
   const cache = await caches.open(cacheName);
-  const keys = await cache.keys();
+  // The precached page, icon and sprites are never evicted.
+  const keys = (await cache.keys()).filter((req) => !PRECACHE.includes(new URL(req.url).pathname));
   for (let i = 0; i < keys.length - max; i++) await cache.delete(keys[i]);
 }
 
@@ -48,7 +51,7 @@ async function cacheFirst(request, cacheName) {
   if (response.ok && (response.type === 'basic' || response.type === 'cors')) {
     const cache = await caches.open(cacheName);
     await cache.put(request, response.clone());
-    if (cacheName === ART_CACHE) void trim(ART_CACHE, MAX_ART_ENTRIES);
+    void trim(cacheName, cacheName === ART_CACHE ? MAX_ART_ENTRIES : MAX_APP_ENTRIES);
   }
   return response;
 }
@@ -56,7 +59,10 @@ async function cacheFirst(request, cacheName) {
 async function networkFirst(request) {
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    // Only the real app page is kept for offline use, never an error or login interstitial.
+    const isAppPage =
+      response.ok && response.type === 'basic' && (response.headers.get('content-type') || '').includes('text/html');
+    if (isAppPage && new URL(request.url).pathname === '/') {
       const cache = await caches.open(APP_CACHE);
       await cache.put('/', response.clone());
     }

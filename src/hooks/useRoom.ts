@@ -43,6 +43,9 @@ function brokerOptions(): PeerOptions {
 }
 const RECONNECT_INTERVAL_MS = 2000;
 const RECONNECT_ATTEMPTS = 15;
+// Connections must introduce themselves quickly; strangers can't pile up unanswered ones.
+const HELLO_TIMEOUT_MS = 5000;
+const MAX_PENDING_CONNECTIONS = 3;
 
 function clientId(): string {
   try {
@@ -142,9 +145,31 @@ export function useRoom(onMessage: (msg: Message) => void) {
       }
     });
 
+    let pending = 0;
     peer.on('connection', (conn) => {
+      // The joining side picks the encoding; only the default (chunked binary) is expected.
+      if (conn.serialization !== 'binary' || pending >= MAX_PENDING_CONNECTIONS) {
+        conn.close();
+        return;
+      }
+      pending++;
+      let settled = false;
+      const settle = () => {
+        if (!settled) {
+          settled = true;
+          pending--;
+        }
+      };
+      const helloTimer = setTimeout(() => {
+        if (!accepted) conn.close();
+        settle();
+      }, HELLO_TIMEOUT_MS);
+      conn.on('close', () => {
+        clearTimeout(helloTimer);
+        settle();
+      });
+      let accepted = false;
       conn.on('open', () => {
-        let accepted = false;
         attach(
           conn,
           () => {
@@ -161,17 +186,24 @@ export function useRoom(onMessage: (msg: Message) => void) {
               setTimeout(() => conn.close(), 200);
               return false;
             }
-            // One guest per room. The same guest may come back after a dropped connection.
+            // One guest per room. The same guest may come back after a dropped connection, in
+            // which case the new connection replaces the old one (which may not have noticed
+            // the drop yet).
             const known = guestClientRef.current;
+            const returning = known === msg.clientId;
             const busy = connRef.current?.open && connRef.current !== conn;
-            if ((known && known !== msg.clientId) || busy) {
+            if ((known && !returning) || (busy && !returning)) {
               conn.send({ t: 'reject', reason: 'full' } satisfies Message);
               setTimeout(() => conn.close(), 200);
               return false;
             }
             accepted = true;
+            clearTimeout(helloTimer);
+            settle();
+            const stale = connRef.current;
             guestClientRef.current = msg.clientId;
             connRef.current = conn;
+            if (stale && stale !== conn) stale.close();
             setStatus('connected');
             return true;
           },
@@ -190,6 +222,8 @@ export function useRoom(onMessage: (msg: Message) => void) {
     const peer = new Peer(brokerOptions());
     peerRef.current = peer;
     let everConnected = false;
+    // Set once the host has admitted us (sent the lobby); only then is "full" worth retrying.
+    let admitted = false;
     let attempts = 0;
 
     const connect = () => {
@@ -207,7 +241,13 @@ export function useRoom(onMessage: (msg: Message) => void) {
         connRef.current = null;
         retry();
       }, (msg) => {
+        if (msg.t === 'lobby') admitted = true;
         if (msg.t === 'reject') {
+          // While reconnecting, "full" usually means the host still holds our old connection.
+          if (msg.reason === 'full' && admitted) {
+            conn.close();
+            return false;
+          }
           closedByUser.current = true;
           fail(msg.reason === 'full' ? 'That room already has two players.' : 'The host is on a different version. Refresh both phones.');
           return false;
