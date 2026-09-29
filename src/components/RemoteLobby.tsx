@@ -8,6 +8,7 @@ import { Logo } from './Lobby';
 import { DEFAULT_SETTINGS, type GameSettings, type Player } from '@/lib/game-state';
 import { MAX_NAME_LENGTH, ROOM_CODE_LENGTH, SPECTATOR_ID, normalizeRoomCode } from '@/lib/net/protocol';
 import { MAX_PLAYERS } from '@/lib/game-state';
+import { shareInvite } from '@/lib/share';
 import type { RoomStatus } from '@/hooks/useRoom';
 
 interface RemoteLobbyProps {
@@ -56,25 +57,10 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
     </ul>
   );
 
-  const inviteUrl = code && typeof window !== 'undefined' ? `${window.location.origin}/?room=${code}` : '';
-
-  const shareInvite = async () => {
-    const text = `Play Who's That Pokémon with me! Room code: ${code}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Who's That Pokémon?", text, url: inviteUrl });
-        return;
-      } catch {
-        // Cancelled or unsupported; fall back to copying.
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(`${text}\n${inviteUrl}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard blocked: the code is on screen to read out.
-    }
+  const share = async () => {
+    if (!code || (await shareInvite(code)) !== 'copied') return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   // ---- In a room -------------------------------------------------------------------------------
@@ -90,7 +76,7 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
               <p className="font-pixel text-2xl tracking-[0.3em] text-accent select-all" aria-label={`Room code ${code.split('').join(' ')}`}>
                 {code}
               </p>
-              <PokeBallButton onClick={shareInvite} variant="blue" size="sm" className="w-full">
+              <PokeBallButton onClick={share} variant="blue" size="sm" className="w-full">
                 {copied ? 'Invite copied!' : 'Share invite'}
               </PokeBallButton>
             </div>

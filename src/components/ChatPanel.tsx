@@ -18,8 +18,9 @@ export default function ChatPanel({ messages, title = 'Guesses' }: ChatPanelProp
 
   return (
     <section className="flex flex-col bg-surface rounded-xl border-3 border-line overflow-hidden" aria-label={title}>
-      <div className="bg-pokemon-dark text-white px-3 py-1 text-xs font-bold font-body">{title}</div>
-      <div ref={scrollRef} className="overflow-y-auto p-2 space-y-1 h-24" aria-live="polite">
+      <div className="bg-pokemon-dark text-white px-3 py-1 short:py-0.5 text-xs font-bold font-body">{title}</div>
+      {/* About three guesses tall on short screens, so the canvas and buttons still fit. */}
+      <div ref={scrollRef} className="overflow-y-auto p-2 short:p-1.5 space-y-1 h-24 short:h-[4.25rem]" aria-live="polite">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -31,7 +32,7 @@ export default function ChatPanel({ messages, title = 'Guesses' }: ChatPanelProp
             {msg.isCorrect ? 'got it!' : msg.text}
           </div>
         ))}
-        {messages.length === 0 && <p className="text-ink-muted text-xs text-center py-3 font-body">No guesses yet…</p>}
+        {messages.length === 0 && <p className="text-ink-muted text-xs text-center py-3 short:py-1.5 font-body">No guesses yet…</p>}
       </div>
     </section>
   );

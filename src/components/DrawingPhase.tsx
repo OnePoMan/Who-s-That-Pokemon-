@@ -16,6 +16,8 @@ interface DrawingPhaseProps {
   view: 'local' | 'drawer' | 'guesser';
   drawer: Player;
   guessers: Player[];
+  /** The drawer's own phone only: the Pokémon, as a reminder while drawing. */
+  pokemonName?: string | null;
   remainingMs: number;
   totalMs: number;
   chatMessages: ChatMessage[];
@@ -34,6 +36,7 @@ export default function DrawingPhase({
   view,
   drawer,
   guessers,
+  pokemonName = null,
   remainingMs,
   totalMs,
   chatMessages,
@@ -63,15 +66,27 @@ export default function DrawingPhase({
     fn();
   };
 
-  const header = (
-    <div className="flex items-center gap-3 w-full">
-      <div className="flex items-center gap-2 shrink-0">
-        <AvatarIcon avatarId={drawer.avatarId} size="sm" />
-        <span className="text-xs font-bold text-ink font-body">{view === 'drawer' ? 'You are drawing' : `${drawer.nickname} is drawing`}</span>
+  const header =
+    view === 'drawer' && pokemonName ? (
+      // A reminder on the drawer's own phone only; on a shared phone the guessers would see it.
+      <div className="flex items-center gap-3 w-full">
+        <p className="flex-1 min-w-0 font-body leading-tight">
+          <span className="block whitespace-nowrap text-[10px] font-bold uppercase tracking-wider text-ink-muted">You&apos;re drawing</span>
+          <span className="block text-sm font-bold text-accent break-words">{pokemonName}</span>
+        </p>
+        <div className="w-[42%] shrink-0">
+          <Timer remainingMs={remainingMs} totalMs={totalMs} />
+        </div>
       </div>
-      <Timer remainingMs={remainingMs} totalMs={totalMs} />
-    </div>
-  );
+    ) : (
+      <div className="flex items-center gap-3 w-full">
+        <div className="flex items-center gap-2 shrink-0">
+          <AvatarIcon avatarId={drawer.avatarId} size="sm" />
+          <span className="text-xs font-bold text-ink font-body">{view === 'drawer' ? 'You are drawing' : `${drawer.nickname} is drawing`}</span>
+        </div>
+        <Timer remainingMs={remainingMs} totalMs={totalMs} />
+      </div>
+    );
 
   const resultButtons = (correctLabel: string, skipLabel: string) => (
     <div className="flex gap-3 w-full">

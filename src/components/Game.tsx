@@ -12,6 +12,7 @@ import DrawingGallery from './DrawingGallery';
 import ConfirmDialog from './ConfirmDialog';
 import PokeBallButton from './PokeBallButton';
 import TVView from './TVView';
+import RoomBadge from './RoomBadge';
 import Reactions, { ReactionBar, type FloatingReaction } from './Reactions';
 import SoloPlay from './SoloPlay';
 import PokedexScreen from './PokedexScreen';
@@ -193,6 +194,17 @@ export default function Game() {
     [captureDrawing],
   );
 
+  /**
+   * Every round starts on a blank canvas. Strokes received from other phones are buffered so a
+   * canvas that mounts late can catch up, and a drawer that reconnects resends its canvas; neither
+   * may carry the last round's drawing into the next one, so the old canvas is forgotten too.
+   */
+  const clearRoundStrokes = () => {
+    remoteStrokesRef.current = [];
+    sentCanvasRef.current = false;
+    canvasRef.current = null;
+  };
+
   const nextPokemon = (s: GameState, fresh = false) =>
     pickRandomPokemon(s.settings.difficulty, fresh ? [] : s.usedPokemonIds, s.settings);
 
@@ -220,11 +232,13 @@ export default function Game() {
           break;
         case 'next-round':
           if (s.phase !== 'REVEAL') break;
+          clearRoundStrokes();
           dispatch({ type: 'NEXT_ROUND', pokemon: nextPokemon(s) });
           beginRoundTimers(s.mode);
           break;
         case 'rematch':
           if (s.phase !== 'GAME_OVER') break;
+          clearRoundStrokes();
           setDrawings({});
           dispatch({ type: 'REMATCH', pokemon: nextPokemon(s, true) });
           beginRoundTimers(s.mode);
@@ -315,12 +329,30 @@ export default function Game() {
     if (s.phase === 'DRAWING' && timeline?.length) room?.sendTo(clientId, { t: 'canvas', round: s.round, events: timeline });
   };
 
-  const admit = useCallback((hello: HelloMessage): RejectReason | null => {
-    if (hello.role === 'spectator') return spectatorsRef.current.size >= MAX_SPECTATORS && !spectatorsRef.current.has(hello.clientId) ? 'full' : null;
-    if (clientPlayersRef.current.has(hello.clientId)) return null; // a player coming back
-    if (stateRef.current.phase !== 'LOBBY') return 'started';
-    return lobbyRef.current.length >= MAX_PLAYERS ? 'full' : null;
+  /**
+   * Mid-game, a player whose phone lost its identity (tab closed, other browser) can take back
+   * their seat by joining with the same name, as long as that seat has no phone connected.
+   */
+  const reclaimableSeat = useCallback((name: string): string | null => {
+    const s = stateRef.current;
+    if (s.phase === 'LOBBY') return null;
+    const key = name.trim().toLowerCase();
+    const seat = s.players.find((p) => p.id !== HOST_ID && p.nickname.trim().toLowerCase() === key);
+    if (!seat) return null;
+    const online = new Set(roomRef.current?.connected ?? []);
+    const inUse = [...clientPlayersRef.current].some(([client, id]) => id === seat.id && online.has(client));
+    return inUse ? null : seat.id;
   }, []);
+
+  const admit = useCallback(
+    (hello: HelloMessage): RejectReason | null => {
+      if (hello.role === 'spectator') return spectatorsRef.current.size >= MAX_SPECTATORS && !spectatorsRef.current.has(hello.clientId) ? 'full' : null;
+      if (clientPlayersRef.current.has(hello.clientId)) return null; // a player coming back
+      if (stateRef.current.phase !== 'LOBBY') return reclaimableSeat(hello.name) ? null : 'started';
+      return lobbyRef.current.length >= MAX_PLAYERS ? 'full' : null;
+    },
+    [reclaimableSeat],
+  );
 
   const hostHello = (msg: HelloMessage, from: string) => {
     const room = roomRef.current;
@@ -334,6 +366,14 @@ export default function Game() {
     }
     let players = lobbyRef.current;
     let playerId = clientPlayersRef.current.get(from);
+    if (!playerId && stateRef.current.phase !== 'LOBBY') {
+      // A dropped player back on a new phone identity: hand them their old seat.
+      const seat = reclaimableSeat(msg.name);
+      if (!seat) return;
+      for (const [client, id] of [...clientPlayersRef.current]) if (id === seat) clientPlayersRef.current.delete(client);
+      clientPlayersRef.current.set(from, seat);
+      playerId = seat;
+    }
     if (!playerId) {
       const taken = new Set(players.map((p) => p.id));
       let n = 2;
@@ -347,6 +387,8 @@ export default function Game() {
       lobbyRef.current = players;
       setLobbyPlayers(players);
     }
+    const joined = playerId;
+    setOffline((prev) => prev.filter((id) => id !== joined));
     room.broadcast((id) => lobbyMessage(id, stateRef.current.phase === 'LOBBY' ? players : stateRef.current.players));
     catchUp(from);
   };
@@ -437,10 +479,7 @@ export default function Game() {
         const { state: next, hint } = fromWire(msg.state, Date.now());
         setRemoteHint(hint);
         if (s.phase === 'DRAWING' && (next.phase !== 'DRAWING' || next.round !== s.round)) captureDrawing(s.round);
-        if (next.round !== s.round) {
-          remoteStrokesRef.current = [];
-          sentCanvasRef.current = false;
-        }
+        if (next.round !== s.round) clearRoundStrokes();
         if (next.phase === 'MEMORIZE' && next.round === 1 && s.round !== 1) setDrawings({});
         dispatch({ type: 'REPLACE', state: next });
         // Messages that follow straight away (e.g. the canvas snapshot after a reconnect)
@@ -661,6 +700,7 @@ export default function Game() {
 
   const startLocal = (players: Player[], settings: GameSettings) => {
     sound.startBgm();
+    clearRoundStrokes();
     setDrawings({});
     dispatch({ type: 'START_GAME', mode: 'local', players, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
   };
@@ -668,6 +708,7 @@ export default function Game() {
   const startRemote = (settings: GameSettings) => {
     if (!room.isHost || lobbyPlayers.length < 2) return;
     sound.startBgm();
+    clearRoundStrokes();
     setDrawings({});
     dispatch({ type: 'START_GAME', mode: 'remote', players: lobbyPlayers, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
     beginRoundTimers('remote');
@@ -695,6 +736,7 @@ export default function Game() {
     room.leave();
     sound.stopBgm();
     dispatch({ type: 'RESET' });
+    clearRoundStrokes();
     setScreen('lobby');
     setLobbyPlayers([]);
     setSpectatorCount(0);
@@ -772,6 +814,8 @@ export default function Game() {
   const streaks = Object.fromEntries(state.players.map((p) => [p.id, guessStreak(state, p.id)]));
   const solver = state.players.find((p) => p.id === state.roundResults.at(-1)?.solvedBy) ?? null;
   const connectionTrouble = isRemote && !room.isHost && (room.status === 'reconnecting' || room.status === 'error');
+  // Shown to everyone in a room (host and guests) from the lobby to the end of the game.
+  const roomCode = room.code && (screen === 'remote' || isRemote) && room.status !== 'idle' ? room.code : null;
   const offlineNames = state.players.filter((p) => offline.includes(p.id)).map((p) => p.nickname);
 
   if (spectating) {
@@ -796,22 +840,27 @@ export default function Game() {
 
   return (
     <div className="flex flex-col flex-1">
-      <header className="pokedex-topbar">
-        <span className="logo-text">WHO&apos;S THAT POKÉMON?</span>
-        <SettingsPanel
-          prefs={prefs}
-          onChangePrefs={updatePrefs}
-          drawingCount={Object.keys(drawings).length}
-          onOpenGallery={() => setGalleryOpen(true)}
-          onGoHome={requestHome}
-          showHome={state.phase !== 'LOBBY' || screen !== 'lobby'}
-          onHowToPlay={() => setGuideOpen(true)}
-        />
+      <header className="pokedex-topbar gap-2">
+        {/* On narrow phones the room code takes the title's place. */}
+        <span className={`logo-text ${roomCode ? 'hidden min-[400px]:inline' : ''}`}>WHO&apos;S THAT POKÉMON?</span>
+        <div className="ml-auto flex items-center gap-2">
+          {roomCode && <RoomBadge code={roomCode} />}
+          <SettingsPanel
+            prefs={prefs}
+            onChangePrefs={updatePrefs}
+            drawingCount={Object.keys(drawings).length}
+            onOpenGallery={() => setGalleryOpen(true)}
+            onGoHome={requestHome}
+            showHome={state.phase !== 'LOBBY' || screen !== 'lobby'}
+            onHowToPlay={() => setGuideOpen(true)}
+          />
+        </div>
       </header>
 
       {room.isHost && isRemote && offlineNames.length > 0 && (
         <p role="status" className="bg-amber-100 text-amber-900 text-xs font-body font-semibold text-center py-1 px-3">
           Reconnecting: {offlineNames.join(', ')}
+          {room.code && <> · rejoin with code {room.code} and the same name</>}
         </p>
       )}
 
@@ -888,6 +937,7 @@ export default function Game() {
             view={view}
             drawer={drawer}
             guessers={guessers}
+            pokemonName={view === 'drawer' ? state.currentPokemon?.name : null}
             hint={shownHint}
             remainingMs={remainingMs ?? 0}
             totalMs={state.settings.timerDuration * 1000}
@@ -998,8 +1048,8 @@ export default function Game() {
             {shownBadge.icon}
           </span>
           <span>
-            <span className="block text-[10px] font-bold uppercase tracking-widest text-ink-muted">Badge earned</span>
-            <span className="block text-sm font-bold">{shownBadge.title}</span>
+            <span className="block whitespace-nowrap text-[10px] font-bold uppercase tracking-widest text-ink-muted">Badge earned</span>
+            <span className="block whitespace-nowrap text-sm font-bold">{shownBadge.title}</span>
           </span>
         </div>
       )}

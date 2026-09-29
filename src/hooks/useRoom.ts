@@ -41,12 +41,16 @@ const RECONNECT_INTERVAL_MS = 2000;
 const RECONNECT_ATTEMPTS = 15;
 // Connections must introduce themselves quickly; strangers can't pile up unanswered ones.
 const HELLO_TIMEOUT_MS = 5000;
+// Every connection pings every few seconds; one silent for longer than the timeout is treated as
+// dropped. A phone that loses signal or has its tab closed often never reports the drop itself.
+const PING_INTERVAL_MS = 3000;
+const SILENCE_TIMEOUT_MS = 15000;
 const MAX_PENDING_CONNECTIONS = 3;
 const MAX_GUEST_CONNECTIONS = MAX_PLAYERS - 1 + 4;
 
 const REJECT_TEXT: Record<RejectReason, string> = {
   full: 'That room is full.',
-  started: 'That game has already started. Ask the host to start a new one, or join as a TV screen to watch.',
+  started: "That game has already started. If you were playing and dropped out, join again with the exact name you were playing as. Otherwise, join as a TV screen to watch.",
   version: 'The host is on a different version. Refresh every phone and try again.',
 };
 
@@ -116,20 +120,43 @@ export function useRoom(onMessage: (msg: Message, from: string | null) => void, 
     (conn: DataConnection, from: string | null, onClose: () => void, filter?: (msg: Message) => boolean) => {
       let windowStart = Date.now();
       let count = 0;
+      let lastHeard = Date.now();
+      let dead = false;
+      const heartbeat = setInterval(() => {
+        const now = Date.now();
+        // Opening has its own timeouts; silence only counts once the connection is up.
+        if (!conn.open) {
+          lastHeard = now;
+          return;
+        }
+        if (now - lastHeard > SILENCE_TIMEOUT_MS) {
+          closed();
+          conn.close();
+          return;
+        }
+        conn.send({ t: 'ping' } satisfies Message);
+      }, PING_INTERVAL_MS);
+      const closed = () => {
+        clearInterval(heartbeat);
+        if (dead) return;
+        dead = true;
+        onClose();
+      };
       conn.on('data', (raw) => {
         const now = Date.now();
+        lastHeard = now;
         if (now - windowStart > 1000) {
           windowStart = now;
           count = 0;
         }
         if (++count > MAX_MESSAGES_PER_SECOND) return;
         const msg = validateMessage(raw);
-        if (!msg) return;
+        if (!msg || msg.t === 'ping') return;
         if (filter && !filter(msg)) return;
         onMessageRef.current(msg, from);
       });
-      conn.on('close', onClose);
-      conn.on('error', onClose);
+      conn.on('close', closed);
+      conn.on('error', closed);
     },
     [],
   );

@@ -6,7 +6,7 @@ A drawing and guessing game for 2–8 players. One player gets a few seconds to 
 
 **One phone.** Hand the phone to the drawer; everyone else looks away. The drawer taps *Show me*, memorizes the Pokémon, then starts drawing. A banner tells the guessers to look; they shout guesses or type one into the guess box under the canvas (a name dropdown appears after the first letter, and a correct pick ends the round). *…got it!* and *Skip* are there for shouted guesses. Everyone takes a turn drawing.
 
-**Several phones.** One player taps *Play on several phones → Create a room* and shares the six-character code (or the invite link, which fills the code in); up to 8 players join with it. The drawer's strokes appear live on everyone's phone; guessers type a guess and pick a name from the dropdown, so spelling never decides the round, and can send quick emoji reactions. The drawer can also confirm a guess (choosing who got it) or give up. A player who drops out keeps their seat and can rejoin with the same code; new players can't join once a game has started.
+**Several phones.** One player taps *Play on several phones → Create a room* and shares the six-character code (or the invite link, which fills the code in); up to 8 players join with it. The drawer's strokes appear live on everyone's phone; guessers type a guess and pick a name from the dropdown, so spelling never decides the round, and can send quick emoji reactions. The drawer can also confirm a guess (choosing who got it) or give up. The room code stays in the top bar on every phone (tap it to share the invite). A player who drops out keeps their seat: they rejoin with the same code — using the same name if they're on a new browser or closed the tab — and carry on with their score. New players can't join once a game has started.
 
 **TV / big screen.** Open the site on a laptop or smart-TV browser, enter the room code and choose *Watch on this screen*. It shows the live drawing, timer, hints, guesses, reactions, reveal and scores for everyone in the room, and never receives the answer early. Up to 4 screens can watch.
 
@@ -67,6 +67,7 @@ The page's Content-Security-Policy follows these settings automatically.
 
 - Everything received from the other phone is validated (`src/lib/net/protocol.ts`) and rate limited; the host decides every outcome, so a modified client can't score for itself or see the answer early. Guesses are limited to about one per second and 30 per round.
 - Drawings are capped (60 fills, 1,000 operations, 20,000 points) and undo/redo/fill are paced, so a hostile peer can't freeze the other phone.
+- Every connection sends a heartbeat; a phone silent for 15 seconds is treated as dropped, so its seat can be reclaimed. A seat can only be reclaimed by name while no phone holds it.
 - Rooms hold up to 8 players and 4 watching screens; unidentified connections are dropped after 5 seconds; a rejoining guest checks it is talking to the same host.
 - Content-Security-Policy and other security headers are set in `next.config.ts`.
 
