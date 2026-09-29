@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Short screens (small phones), for tightening layouts: `short:h-14`. */
+@custom-variant short (@media (max-height: 700px));
+
 :root {
   --pokemon-red: #DC0A2D;
   --pokemon-red-dark: #A00020;

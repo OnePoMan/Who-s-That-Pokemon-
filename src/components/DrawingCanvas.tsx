@@ -140,7 +140,15 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
     const fit = () => {
       const others = root.scrollHeight - box.offsetHeight;
       const top = root.getBoundingClientRect().top + window.scrollY;
-      const available = window.innerHeight - top - others - 12;
+      // The page's padding and borders under the content area, measured rather than guessed, so
+      // the screen fits exactly without scrolling. (Not the space under the root itself: the
+      // content area centres it, and that gap is free to use.)
+      const area = root.closest('main');
+      const below = area
+        ? parseFloat(getComputedStyle(area).paddingBottom) +
+          Math.max(0, document.documentElement.scrollHeight - (area.getBoundingClientRect().bottom + window.scrollY))
+        : 12;
+      const available = window.innerHeight - top - others - below;
       const width = box.parentElement?.clientWidth ?? 600;
       setSide(Math.floor(Math.max(150, Math.min(600, width, available))));
     };
