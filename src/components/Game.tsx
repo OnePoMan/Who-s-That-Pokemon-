@@ -193,6 +193,17 @@ export default function Game() {
     [captureDrawing],
   );
 
+  /**
+   * Every round starts on a blank canvas. Strokes received from other phones are buffered so a
+   * canvas that mounts late can catch up, and a drawer that reconnects resends its canvas; neither
+   * may carry the last round's drawing into the next one, so the old canvas is forgotten too.
+   */
+  const clearRoundStrokes = () => {
+    remoteStrokesRef.current = [];
+    sentCanvasRef.current = false;
+    canvasRef.current = null;
+  };
+
   const nextPokemon = (s: GameState, fresh = false) =>
     pickRandomPokemon(s.settings.difficulty, fresh ? [] : s.usedPokemonIds, s.settings);
 
@@ -220,11 +231,13 @@ export default function Game() {
           break;
         case 'next-round':
           if (s.phase !== 'REVEAL') break;
+          clearRoundStrokes();
           dispatch({ type: 'NEXT_ROUND', pokemon: nextPokemon(s) });
           beginRoundTimers(s.mode);
           break;
         case 'rematch':
           if (s.phase !== 'GAME_OVER') break;
+          clearRoundStrokes();
           setDrawings({});
           dispatch({ type: 'REMATCH', pokemon: nextPokemon(s, true) });
           beginRoundTimers(s.mode);
@@ -437,10 +450,7 @@ export default function Game() {
         const { state: next, hint } = fromWire(msg.state, Date.now());
         setRemoteHint(hint);
         if (s.phase === 'DRAWING' && (next.phase !== 'DRAWING' || next.round !== s.round)) captureDrawing(s.round);
-        if (next.round !== s.round) {
-          remoteStrokesRef.current = [];
-          sentCanvasRef.current = false;
-        }
+        if (next.round !== s.round) clearRoundStrokes();
         if (next.phase === 'MEMORIZE' && next.round === 1 && s.round !== 1) setDrawings({});
         dispatch({ type: 'REPLACE', state: next });
         // Messages that follow straight away (e.g. the canvas snapshot after a reconnect)
@@ -661,6 +671,7 @@ export default function Game() {
 
   const startLocal = (players: Player[], settings: GameSettings) => {
     sound.startBgm();
+    clearRoundStrokes();
     setDrawings({});
     dispatch({ type: 'START_GAME', mode: 'local', players, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
   };
@@ -668,6 +679,7 @@ export default function Game() {
   const startRemote = (settings: GameSettings) => {
     if (!room.isHost || lobbyPlayers.length < 2) return;
     sound.startBgm();
+    clearRoundStrokes();
     setDrawings({});
     dispatch({ type: 'START_GAME', mode: 'remote', players: lobbyPlayers, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
     beginRoundTimers('remote');
@@ -695,6 +707,7 @@ export default function Game() {
     room.leave();
     sound.stopBgm();
     dispatch({ type: 'RESET' });
+    clearRoundStrokes();
     setScreen('lobby');
     setLobbyPlayers([]);
     setSpectatorCount(0);
