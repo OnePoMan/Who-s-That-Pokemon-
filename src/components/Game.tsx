@@ -937,6 +937,7 @@ export default function Game() {
             view={view}
             drawer={drawer}
             guessers={guessers}
+            pokemonName={view === 'drawer' ? state.currentPokemon?.name : null}
             hint={shownHint}
             remainingMs={remainingMs ?? 0}
             totalMs={state.settings.timerDuration * 1000}
@@ -1047,8 +1048,8 @@ export default function Game() {
             {shownBadge.icon}
           </span>
           <span>
-            <span className="block text-[10px] font-bold uppercase tracking-widest text-ink-muted">Badge earned</span>
-            <span className="block text-sm font-bold">{shownBadge.title}</span>
+            <span className="block whitespace-nowrap text-[10px] font-bold uppercase tracking-widest text-ink-muted">Badge earned</span>
+            <span className="block whitespace-nowrap text-sm font-bold">{shownBadge.title}</span>
           </span>
         </div>
       )}
