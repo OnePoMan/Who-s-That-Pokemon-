@@ -144,3 +144,10 @@ describe('text cleaning', () => {
     expect(safeFilename('???')).toBe('drawing');
   });
 });
+
+describe('heartbeat', () => {
+  it('accepts a bare ping and strips anything extra', () => {
+    expect(validateMessage({ t: 'ping' })).toEqual({ t: 'ping' });
+    expect(validateMessage({ t: 'ping', payload: 'x'.repeat(10_000) })).toEqual({ t: 'ping' });
+  });
+});

@@ -20,7 +20,7 @@ import {
   type RoundResult,
 } from '../game-state';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 /** Big-screen spectators (e.g. a TV browser) that watch but don't play. */
 export const MAX_SPECTATORS = 4;
 export const SPECTATOR_ID = 'spectator';
@@ -58,7 +58,9 @@ export type Message =
   | { t: 'draw'; e: DrawEvent }
   | { t: 'canvas'; round: number; events: DrawEvent[] }
   | { t: 'react'; emoji: Reaction }
-  | { t: 'reaction'; from: string; emoji: Reaction };
+  | { t: 'reaction'; from: string; emoji: Reaction }
+  /** Heartbeat, both ways, so a phone that vanishes without closing its connection is noticed. */
+  | { t: 'ping' };
 
 /** Cryptographically random, so codes can't be predicted from earlier ones. */
 export function generateRoomCode(): string {
@@ -282,6 +284,8 @@ function validateWireState(s: unknown): WireState | null {
 export function validateMessage(raw: unknown): Message | null {
   if (!isObj(raw)) return null;
   switch (raw.t) {
+    case 'ping':
+      return { t: 'ping' };
     case 'hello': {
       const clientId = cleanText(raw.clientId, 64);
       if (!isInt(raw.v, 0, 999) || !clientId) return null;

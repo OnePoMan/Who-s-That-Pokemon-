@@ -141,3 +141,27 @@ export async function composeDailyCard(drawingUrl: string, title: string, footer
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not create image'))), 'image/png'),
   );
 }
+
+export function inviteUrl(code: string): string {
+  return `${window.location.origin}/?room=${code}`;
+}
+
+/** Shares a room invite through the share sheet, or copies it; 'failed' leaves the code to read out. */
+export async function shareInvite(code: string): Promise<'shared' | 'copied' | 'failed'> {
+  const text = `Play Who's That Pokémon with me! Room code: ${code}`;
+  const url = inviteUrl(code);
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Who's That Pokémon?", text, url });
+      return 'shared';
+    } catch {
+      // Cancelled or unsupported; fall back to copying.
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    return 'copied';
+  } catch {
+    return 'failed';
+  }
+}
