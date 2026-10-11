@@ -94,6 +94,28 @@ describe('validateMessage', () => {
     });
   });
 
+  it('accepts a boolean shiny flag but still rebuilds the artwork URL locally', () => {
+    const shiny = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, shiny: true } }, 'p1', 0);
+    const msg = validateMessage({ t: 'state', state: shiny });
+    expect(msg?.t === 'state' && msg.state.currentPokemon).toEqual({
+      id: 25,
+      name: 'Pikachu',
+      artworkUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png',
+      shiny: true,
+    });
+    const plain = validateMessage({ t: 'state', state: toWire(state, 'p1', 0) });
+    expect(plain?.t === 'state' && plain.state.currentPokemon?.shiny).toBeUndefined();
+    const nulled = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, shiny: null as unknown as boolean } }, 'p1', 0);
+    expect(validateMessage({ t: 'state', state: nulled })).not.toBeNull();
+  });
+
+  it('rejects a non-boolean shiny flag', () => {
+    for (const shiny of ['true', 1, {}, 'https://evil.example/x.png']) {
+      const bad = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, shiny: shiny as unknown as boolean } }, 'p1', 0);
+      expect(validateMessage({ t: 'state', state: bad })).toBeNull();
+    }
+  });
+
   it('rejects unknown Pokémon IDs', () => {
     const bad = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, id: 99999 } }, 'p1', 0);
     expect(validateMessage({ t: 'state', state: bad })).toBeNull();

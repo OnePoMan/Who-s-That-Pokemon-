@@ -10,7 +10,7 @@ import { DIFFICULTY_HINT, OptionRow, PoolFilterFields } from './GameSettingsForm
 import { useNow } from '@/hooks/useDeviceHelpers';
 import type { SoundName } from '@/hooks/useSound';
 import { DIFFICULTIES, type Difficulty, type PokemonData } from '@/lib/game-state';
-import { getPokemonPool, pickRandomPokemon } from '@/lib/pokedex';
+import { getPokemonPool, pickRandomPokemon, revealArtworkUrl } from '@/lib/pokedex';
 import { addDrawing, getDrawingImage } from '@/lib/collection';
 import {
   DAILY_DRAW_SECONDS,
@@ -99,11 +99,11 @@ export default function SoloPlay({ kind, stats, updateStats, play, playCry, onNo
     play('whosthat');
     setTimeout(() => playCry(pokemon.id), 1500); // as the artwork is revealed
     const drawingId = await addDrawing(
-      { pokemonId: pokemon.id, pokemonName: pokemon.name, artist: 'You', source: kind, outcome: 'done', drawnAt: Date.now() },
+      { pokemonId: pokemon.id, pokemonName: pokemon.name, artist: 'You', source: kind, outcome: 'done', drawnAt: Date.now(), ...(pokemon.shiny && { shiny: true }) },
       imageUrl,
     );
     updateStats((s) =>
-      daily ? recordDaily(s, { date: today, pokemonId: pokemon.id, timeMs, drawingId }) : recordSolo(s, pokemon.id),
+      daily ? recordDaily(s, { date: today, pokemonId: pokemon.id, timeMs, drawingId }) : recordSolo(s, pokemon.id, pokemon.shiny),
     );
   };
 
@@ -302,7 +302,7 @@ export function Comparison({ drawingUrl, pokemon, animate = false }: { drawingUr
           <figcaption className="text-[10px] font-bold text-ink-muted uppercase tracking-widest text-center">Yours</figcaption>
         </figure>
         <figure className="space-y-1">
-          <RevealStage imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
+          <RevealStage imageUrl={revealArtworkUrl(pokemon)} revealed={revealed} shiny={pokemon.shiny} name={pokemon.name} className={box} />
           <figcaption className="text-[10px] font-bold text-ink-muted uppercase tracking-widest text-center">Official</figcaption>
         </figure>
       </div>
@@ -380,7 +380,7 @@ async function shareDaily(imageUrl: string, today: string, timeMs: number, strea
 async function shareSolo(finished: Finished, onNotice: (t: string) => void) {
   const { pokemon, imageUrl } = finished;
   try {
-    const blob = await composeComparison(imageUrl, pokemon.artworkUrl, `I drew ${pokemon.name}`);
+    const blob = await composeComparison(imageUrl, revealArtworkUrl(pokemon), `I drew ${pokemon.name}`);
     const outcome = await shareOrDownload(blob, `${safeFilename(pokemon.name)}.png`, `I drew ${pokemon.name} in Who's That Pokémon?`);
     if (outcome === 'downloaded') onNotice('Image saved to your downloads.');
   } catch {

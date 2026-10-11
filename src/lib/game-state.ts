@@ -26,7 +26,10 @@ export interface Player {
 export interface PokemonData {
   id: number;
   name: string;
+  /** The normal artwork, which the drawer memorizes (see `revealArtworkUrl` for the reveal). */
   artworkUrl: string;
+  /** A rare shiny, decided where the Pokémon is picked; shown only at the reveal. */
+  shiny?: boolean;
 }
 
 export interface GameSettings {

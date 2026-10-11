@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Player, PokemonData, RoundOutcome } from '@/lib/game-state';
 import type { DrawEvent } from '@/lib/canvas-engine';
+import { revealArtworkUrl } from '@/lib/pokedex';
 import RevealStage from './RevealStage';
 import DrawingReplay from './DrawingReplay';
 import { AvatarIcon } from './AvatarPicker';
@@ -121,7 +122,7 @@ export default function RevealPhase({
 
       <div className="flex flex-col items-center gap-1">
         <span className="text-[10px] font-bold text-ink-muted uppercase tracking-widest">Official</span>
-        <RevealStage imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
+        <RevealStage imageUrl={revealArtworkUrl(pokemon)} revealed={revealed} shiny={pokemon.shiny} name={pokemon.name} className={box} />
       </div>
 
       <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 py-1 font-body" aria-label="Scores">

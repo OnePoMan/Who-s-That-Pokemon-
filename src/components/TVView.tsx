@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import DrawingCanvas from './DrawingCanvas';
 import HintBar from './HintBar';
 import Timer from './Timer';
+import { revealArtworkUrl } from '@/lib/pokedex';
 import RevealStage from './RevealStage';
 import PokeBallButton from './PokeBallButton';
 import { AvatarIcon } from './AvatarPicker';
@@ -141,7 +142,7 @@ function TVReveal({ state, drawing }: { state: GameState; drawing: SavedDrawing 
             <img src={drawing.dataUrl} alt="The drawing" className="w-full h-full object-contain" />
           )}
         </div>
-        <RevealStage imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
+        <RevealStage imageUrl={revealArtworkUrl(pokemon)} revealed={revealed} shiny={pokemon.shiny} name={pokemon.name} className={box} />
       </div>
     </div>
   );

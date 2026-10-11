@@ -163,11 +163,13 @@ function validatePlayer(p: unknown): Player | null {
   return { id, nickname, avatarId: p.avatarId, score: p.score };
 }
 
-// Only the ID is trusted: the name and artwork URL come from this device's own Pokédex, so the
-// other phone can't make it load an arbitrary image or show an arbitrary name.
+// Only the ID and the shiny flag are trusted: the name and artwork URLs come from this device's
+// own Pokédex, so the other phone can't make it load an arbitrary image or show an arbitrary name.
 function validatePokemon(p: unknown): PokemonData | null {
   if (!isObj(p) || !isInt(p.id, 1, 99999)) return null;
-  return getPokemon(p.id);
+  // Absent (or null, as the binary encoding sends undefined) means not shiny; anything else must be a boolean.
+  if (p.shiny != null && typeof p.shiny !== 'boolean') return null;
+  return getPokemon(p.id, p.shiny === true);
 }
 
 function validateSettings(s: unknown): GameSettings | null {

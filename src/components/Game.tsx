@@ -23,7 +23,7 @@ import { useSound } from '@/hooks/useSound';
 import { useRoom, type HelloMessage } from '@/hooks/useRoom';
 import { useNow, useWakeLock } from '@/hooks/useDeviceHelpers';
 import { vibrate } from '@/lib/prefs';
-import { isCorrectGuess, pickRandomPokemon } from '@/lib/pokedex';
+import { isCorrectGuess, pickRandomPokemon, revealArtworkUrl } from '@/lib/pokedex';
 import { buildHint, hintStage, type Hint } from '@/lib/hints';
 import { composeComparison, safeFilename, shareOrDownload } from '@/lib/share';
 import { addDrawing } from '@/lib/collection';
@@ -667,11 +667,12 @@ export default function Game() {
         source: state.mode === 'remote' ? 'multi-phone' : 'one-phone',
         outcome,
         drawnAt: Date.now(),
+        ...(pokemon.shiny && { shiny: true }),
       },
       drawing.dataUrl,
     );
     const streak = Math.max(0, ...state.players.map((p) => guessStreak(state, p.id)));
-    updateProgress((st) => recordRound(st, { pokemonId: pokemon.id, outcome, quick: (drawing.leftFraction ?? 0) >= 2 / 3, streak }));
+    updateProgress((st) => recordRound(st, { pokemonId: pokemon.id, outcome, quick: (drawing.leftFraction ?? 0) >= 2 / 3, streak, shiny: pokemon.shiny }));
   }, [state, drawings, myId, updateProgress]);
 
   const recordedGameRef = useRef(false);
@@ -776,7 +777,7 @@ export default function Game() {
     if (!result || !drawing) return;
     const drawer = state.players.find((p) => p.id === result.drawerId)?.nickname ?? 'Someone';
     try {
-      const blob = await composeComparison(drawing.dataUrl, result.pokemon.artworkUrl, `${drawer} drew ${result.pokemon.name}`);
+      const blob = await composeComparison(drawing.dataUrl, revealArtworkUrl(result.pokemon), `${drawer} drew ${result.pokemon.name}`);
       const outcome = await shareOrDownload(blob, `${safeFilename(result.pokemon.name, 'by', drawer)}.png`, `${drawer} drew ${result.pokemon.name} in Who's That Pokémon?`);
       if (outcome === 'downloaded') setNotice('Image saved to your downloads.');
     } catch {

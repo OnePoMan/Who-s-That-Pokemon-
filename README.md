@@ -14,9 +14,9 @@ A drawing and guessing game for 2–8 players. One player gets a few seconds to 
 
 **Solo practice.** Pick a difficulty and filters, then draw at your own pace with no timer and compare with the official artwork.
 
-**Pokédex, stats and badges.** Every drawing made or watched on the phone — in games, the daily and solo practice — is saved to its Pokédex (all 1,175 Pokémon and forms, filterable by generation and type), where you can see, save, share or delete each one. The Stats tab tracks games, rounds guessed, streaks, most-drawn Pokémon and more, and there are 17 badges to earn.
+**Pokédex, stats and badges.** Every drawing made or watched on the phone — in games, the daily and solo practice — is saved to its Pokédex (all 1,175 Pokémon and forms, filterable by generation and type), where you can see, save, share or delete each one. The Stats tab tracks games, rounds guessed, streaks, most-drawn Pokémon and more, and there are 18 badges to earn.
 
-After each round the answer is revealed anime-style — a silhouette over a blue burst that flashes into the official artwork, with the Pokémon's cry — with a timelapse replay and a share card. Every drawing from the session is in the gallery (settings menu, or at the end of the game) to download or share.
+After each round the answer is revealed anime-style — a silhouette over a blue burst that flashes into the official artwork, with the Pokémon's cry — with a timelapse replay and a share card. Now and then (1 in 64) the Pokémon is a **shiny**: the drawer still memorizes the normal colours, but the reveal flashes into the shiny artwork with a sparkling "Shiny!" label, and the Pokédex marks that drawing. Every drawing from the session is in the gallery (settings menu, or at the end of the game) to download or share.
 
 **Scoring.** With two players, the guesser scores a point for a correct guess and the first to 3/5/7 points wins. With three or more, the first player to guess and the drawer each score a point (on a shared phone you tap who got it), everyone draws the same number of times (1–3 turns each), and the highest score wins; ties share the win.
 
