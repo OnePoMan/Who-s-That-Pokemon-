@@ -34,6 +34,7 @@ Difficulty: *Easy* is ~160 well-known Pokémon, *Medium* ~370, *Hard* all 1,025 
 npm install
 npm run dev          # http://localhost:3000
 npm test             # unit tests (Vitest)
+npm run test:e2e     # Playwright smoke tests against a production build (first: npx playwright install chromium)
 npm run lint
 npm run typecheck
 npm run build

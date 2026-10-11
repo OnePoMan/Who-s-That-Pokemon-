@@ -405,7 +405,7 @@ export default function DrawingCanvas({ onDrawEvent, readOnly = false, canvasMan
           </div>
 
           <div className="flex gap-1 items-center overflow-x-auto px-1 py-0.5 no-scrollbar" role="radiogroup" aria-label="Colour">
-            <label className="relative shrink-0 w-7 h-7 rounded-full border-2 border-line/30 overflow-hidden cursor-pointer color-wheel" title="Any colour">
+            <label className="relative shrink-0 w-7 h-7 rounded-full border-2 border-line/30 overflow-hidden cursor-pointer color-wheel focus-within:ring-2 focus-within:ring-pokemon-blue" title="Any colour">
               <span className="sr-only">Choose any colour</span>
               <input
                 type="color"
