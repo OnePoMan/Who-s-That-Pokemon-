@@ -47,11 +47,16 @@ import {
   gameReducer,
   getDrawer,
   getGuessers,
+  getTeamScores,
   getWinners,
+  getWinningTeams,
   guessStreak,
   initialGameState,
   isGameFinished,
   isParty,
+  isSteal,
+  teamsActive,
+  TEAM_NAMES,
   type GameSettings,
   type GameState,
   type Player,
@@ -706,12 +711,12 @@ export default function Game() {
     dispatch({ type: 'START_GAME', mode: 'local', players, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
   };
 
-  const startRemote = (settings: GameSettings) => {
-    if (!room.isHost || lobbyPlayers.length < 2) return;
+  const startRemote = (settings: GameSettings, players: Player[]) => {
+    if (!room.isHost || players.length < 2) return;
     sound.startBgm();
     clearRoundStrokes();
     setDrawings({});
-    dispatch({ type: 'START_GAME', mode: 'remote', players: lobbyPlayers, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
+    dispatch({ type: 'START_GAME', mode: 'remote', players, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
     beginRoundTimers('remote');
   };
 
@@ -786,7 +791,10 @@ export default function Game() {
   };
 
   const shareScore = async () => {
-    const text = `Who's That Pokémon? — ${state.players.map((p) => `${p.nickname}: ${p.score}`).join(' | ')}`;
+    const scores = teamScores
+      ? [`${TEAM_NAMES.red}: ${teamScores.red}`, `${TEAM_NAMES.blue}: ${teamScores.blue}`]
+      : state.players.map((p) => `${p.nickname}: ${p.score}`);
+    const text = `Who's That Pokémon? — ${scores.join(' | ')}`;
     try {
       if (navigator.share) await navigator.share({ title: "Who's That Pokémon?", text });
       else {
@@ -814,6 +822,8 @@ export default function Game() {
   const shownHint = view === 'guesser' ? (room.isHost ? localHint : remoteHint) : view === 'local' ? localHint : null;
   const streaks = Object.fromEntries(state.players.map((p) => [p.id, guessStreak(state, p.id)]));
   const solver = state.players.find((p) => p.id === state.roundResults.at(-1)?.solvedBy) ?? null;
+  const teamScores = teamsActive(state) ? getTeamScores(state) : undefined;
+  const lastResult = state.roundResults.at(-1);
   const connectionTrouble = isRemote && !room.isHost && (room.status === 'reconnecting' || room.status === 'error');
   // Shown to everyone in a room (host and guests) from the lobby to the end of the game.
   const roomCode = room.code && (screen === 'remote' || isRemote) && room.status !== 'idle' ? room.code : null;
@@ -965,6 +975,8 @@ export default function Game() {
             canAssign={view === 'local' || view === 'drawer'}
             onAssign={assign}
             streaks={streaks}
+            teamScores={teamScores}
+            steal={!!teamScores && !!lastResult && isSteal(state, lastResult)}
             drawing={drawings[state.round]}
             onNext={() => act('next-round')}
             nextLabel={isGameFinished(state) ? 'See results' : 'Next round'}
@@ -977,6 +989,8 @@ export default function Game() {
             winners={winners}
             players={state.players}
             roundResults={state.roundResults}
+            teamScores={teamScores}
+            winningTeams={getWinningTeams(state)}
             onRematch={() => act('rematch')}
             onNewGame={goHome}
             onOpenGallery={() => setGalleryOpen(true)}

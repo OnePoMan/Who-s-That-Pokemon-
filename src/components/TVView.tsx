@@ -9,7 +9,8 @@ import RevealStage from './RevealStage';
 import PokeBallButton from './PokeBallButton';
 import { AvatarIcon } from './AvatarPicker';
 import { ScoreChip, type SavedDrawing } from './RevealPhase';
-import { getDrawer, getWinners, roundsInGame, type GameState } from '@/lib/game-state';
+import { TeamRosters, TeamScores } from './TeamPicker';
+import { TEAM_NAMES, getDrawer, getTeamScores, getWinners, getWinningTeams, isSteal, roundsInGame, teamsActive, type GameState } from '@/lib/game-state';
 import type { CanvasManager } from '@/lib/canvas-engine';
 import type { Hint } from '@/lib/hints';
 
@@ -33,6 +34,8 @@ interface TVViewProps {
 export default function TVView({ state, code, remainingMs, hint, drawings, streaks, canvasManagerRef, onCanvasReady, onLeave, connectionLost }: TVViewProps) {
   const drawer = getDrawer(state);
   const totalRounds = roundsInGame(state);
+  const teamScores = teamsActive(state) ? getTeamScores(state) : null;
+  const winningTeams = getWinningTeams(state);
   const joinUrl = code && typeof window !== 'undefined' ? `${window.location.host}/?room=${code}` : '';
 
   return (
@@ -75,11 +78,15 @@ export default function TVView({ state, code, remainingMs, hint, drawings, strea
               🏆
             </p>
             <p className="font-pixel text-xl text-ink leading-relaxed">
-              {getWinners(state)
-                .map((w) => w.nickname)
-                .join(' & ')}{' '}
-              {getWinners(state).length > 1 ? 'win!' : 'wins!'}
+              {teamScores
+                ? winningTeams.length === 1
+                  ? `${TEAM_NAMES[winningTeams[0]]} wins!`
+                  : 'Tie! Both teams win!'
+                : `${getWinners(state)
+                    .map((w) => w.nickname)
+                    .join(' & ')} ${getWinners(state).length > 1 ? 'win!' : 'wins!'}`}
             </p>
+            {teamScores && <TeamRosters players={state.players} />}
           </div>
         )}
       </section>
@@ -98,6 +105,7 @@ export default function TVView({ state, code, remainingMs, hint, drawings, strea
             {totalRounds ? ` of ${totalRounds}` : ` · first to ${state.settings.winScore}`}
           </p>
         )}
+        {teamScores && <TeamScores scores={teamScores} highlight={winningTeams} />}
         <ul className="space-y-2" aria-label="Scores">
           {[...state.players]
             .sort((a, b) => b.score - a.score)
@@ -128,8 +136,10 @@ function TVReveal({ state, drawing }: { state: GameState; drawing: SavedDrawing 
   }, []);
   const pokemon = state.currentPokemon!;
   const solver = state.players.find((p) => p.id === state.roundResults.at(-1)?.solvedBy);
+  const last = state.roundResults.at(-1);
+  const steal = teamsActive(state) && !!last && isSteal(state, last);
   const headline =
-    state.outcome === 'correct' ? (solver ? `${solver.nickname} got it!` : 'Correct!') : state.outcome === 'skipped' ? 'Skipped' : "Time's up!";
+    state.outcome === 'correct' ? (solver ? `${solver.nickname} got it!${steal ? ' Steal!' : ''}` : 'Correct!') : state.outcome === 'skipped' ? 'Skipped' : "Time's up!";
   const box = 'w-[min(30vw,60vh,520px)] aspect-square';
   return (
     <div className="flex flex-col items-center gap-4">
