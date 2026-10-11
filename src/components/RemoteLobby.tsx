@@ -4,8 +4,9 @@ import { useState } from 'react';
 import PokeBallButton from './PokeBallButton';
 import AvatarPicker, { AvatarIcon } from './AvatarPicker';
 import GameSettingsForm from './GameSettingsForm';
+import TeamPicker, { teamStartProblem, withTeams } from './TeamPicker';
 import { Logo } from './Lobby';
-import { DEFAULT_SETTINGS, type GameSettings, type Player } from '@/lib/game-state';
+import { DEFAULT_SETTINGS, MIN_TEAM_PLAYERS, type GameSettings, type Player, type Team } from '@/lib/game-state';
 import { MAX_NAME_LENGTH, ROOM_CODE_LENGTH, SPECTATOR_ID, normalizeRoomCode } from '@/lib/net/protocol';
 import { MAX_PLAYERS } from '@/lib/game-state';
 import { shareInvite } from '@/lib/share';
@@ -25,7 +26,8 @@ interface RemoteLobbyProps {
   initialCode: string | null;
   onHost: (name: string, avatarId: number) => void;
   onJoin: (code: string, name: string, avatarId: number, asSpectator?: boolean) => void;
-  onStart: (settings: GameSettings) => void;
+  /** Players come back with their teams set when team mode is on. */
+  onStart: (settings: GameSettings, players: Player[]) => void;
   onBack: () => void;
 }
 
@@ -37,9 +39,13 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
   const [copied, setCopied] = useState(false);
   const poolEmpty = useFavouritePoolEmpty(settings);
+  const [chosenTeams, setChosenTeams] = useState<Record<string, Team>>({});
 
   const inRoom = status !== 'idle' && status !== 'error';
   const nameOk = name.trim().length > 0;
+  const teamsOn = settings.teams && players.length >= MIN_TEAM_PLAYERS;
+  const teamProblem = teamsOn ? teamStartProblem(players, chosenTeams) : null;
+  const start = () => onStart({ ...settings, teams: teamsOn }, teamsOn ? withTeams(players, chosenTeams) : players);
   const validCode = normalizeRoomCode(joinCode);
   const roster = (
     <ul className="w-full space-y-1.5" aria-label="Players in the room">
@@ -93,12 +99,13 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
         </div>
 
         <GameSettingsForm settings={settings} onChange={setSettings} playerCount={Math.max(2, players.length)} />
+        {teamsOn && <TeamPicker players={players} chosen={chosenTeams} onChange={setChosenTeams} />}
 
         <div className="flex gap-3 w-full">
           <PokeBallButton onClick={onBack} variant="gray" size="md" className="flex-1">
             Leave
           </PokeBallButton>
-          <PokeBallButton onClick={() => onStart(settings)} variant="red" size="lg" className="flex-1" disabled={players.length < 2 || poolEmpty}>
+          <PokeBallButton onClick={start} variant="red" size="lg" className="flex-1" disabled={players.length < 2 || !!teamProblem || poolEmpty}>
             Start battle!
           </PokeBallButton>
         </div>

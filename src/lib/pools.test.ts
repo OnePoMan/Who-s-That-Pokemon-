@@ -51,6 +51,17 @@ describe('pickForSettings', () => {
   });
 });
 
+describe('shiny rolls', () => {
+  it('follows the same odds for favourites and weakest picks', () => {
+    const settings = { ...NONE, favouritesOnly: true };
+    // A constant rng of 0 always rolls shiny; 0.99 never does.
+    expect(pickForSettings('easy', [], settings, [25], () => 0).shiny).toBe(true);
+    expect(pickForSettings('easy', [], settings, [25], () => 0.99).shiny).toBeUndefined();
+    expect(pickWeakest({ 25: 1 }, [], () => 0)?.shiny).toBe(true);
+    expect(pickWeakest({ 25: 1 }, [], () => 0.99)?.shiny).toBeUndefined();
+  });
+});
+
 describe('weakest', () => {
   it('ranks most-missed first, then by ID, ignoring junk', () => {
     expect(rankWeakest({ 25: 2, 6: 5, 4: 2, 7: 0, 99999999: 3 })).toEqual([

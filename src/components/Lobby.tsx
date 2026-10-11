@@ -4,7 +4,8 @@ import { useState } from 'react';
 import PokeBallButton from './PokeBallButton';
 import AvatarPicker, { AvatarIcon, TRAINERS } from './AvatarPicker';
 import GameSettingsForm from './GameSettingsForm';
-import { DEFAULT_SETTINGS, MAX_PLAYERS, MIN_PLAYERS, type GameSettings, type Player } from '@/lib/game-state';
+import TeamPicker, { teamStartProblem, withTeams } from './TeamPicker';
+import { DEFAULT_SETTINGS, MAX_PLAYERS, MIN_PLAYERS, MIN_TEAM_PLAYERS, type GameSettings, type Player, type Team } from '@/lib/game-state';
 import { useFavouritePoolEmpty } from '@/hooks/useFavourites';
 import { MAX_NAME_LENGTH } from '@/lib/net/protocol';
 
@@ -35,8 +36,13 @@ export default function Lobby({ onStartLocal, onRemote, onDaily, onSolo, onPoked
   ]);
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
+  const [chosenTeams, setChosenTeams] = useState<Record<string, Team>>({});
 
   const poolEmpty = useFavouritePoolEmpty(settings);
+  const roster = drafts.map((d, i) => ({ id: `p${i + 1}`, nickname: d.name.trim() || `Player ${i + 1}`, avatarId: d.avatarId }));
+  // Team mode only applies from four players (the setting can linger after removing some).
+  const teamsOn = settings.teams && drafts.length >= MIN_TEAM_PLAYERS;
+  const teamProblem = teamsOn ? teamStartProblem(roster, chosenTeams) : null;
   const namesReady = drafts.every((d) => d.name.trim().length > 0);
   const update = (key: number, patch: Partial<Draft>) => setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
 
@@ -48,7 +54,7 @@ export default function Lobby({ onStartLocal, onRemote, onDaily, onSolo, onPoked
 
   const start = () => {
     const players: Player[] = drafts.map((d, i) => ({ id: `p${i + 1}`, nickname: d.name.trim(), avatarId: d.avatarId, score: 0 }));
-    onStartLocal(players, settings);
+    onStartLocal(teamsOn ? withTeams(players, chosenTeams) : players, { ...settings, teams: teamsOn });
   };
 
   return (
@@ -158,11 +164,12 @@ export default function Lobby({ onStartLocal, onRemote, onDaily, onSolo, onPoked
         <div className="space-y-5 w-full animate-slide-up">
           <h2 className="font-pixel text-xs text-center text-ink">Battle settings</h2>
           <GameSettingsForm settings={settings} onChange={setSettings} playerCount={drafts.length} />
+          {teamsOn && <TeamPicker players={roster} chosen={chosenTeams} onChange={setChosenTeams} />}
           <div className="flex gap-3">
             <PokeBallButton onClick={() => setStep('players')} variant="gray" size="md" className="flex-1">
               Back
             </PokeBallButton>
-            <PokeBallButton onClick={start} variant="red" size="lg" className="flex-1" disabled={poolEmpty}>
+            <PokeBallButton onClick={start} variant="red" size="lg" className="flex-1" disabled={!!teamProblem || poolEmpty}>
               Start battle!
             </PokeBallButton>
           </div>

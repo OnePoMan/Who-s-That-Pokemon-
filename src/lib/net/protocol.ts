@@ -8,6 +8,7 @@ import {
   DIFFICULTIES,
   MAX_PLAYERS,
   MEMORIZE_OPTIONS,
+  TEAMS,
   TIMER_OPTIONS,
   TURNS_OPTIONS,
   WIN_SCORE_OPTIONS,
@@ -160,14 +161,20 @@ function validatePlayer(p: unknown): Player | null {
   const nickname = cleanText(p.nickname, MAX_NAME_LENGTH);
   const id = cleanText(p.id, 64);
   if (!nickname || !id || !isInt(p.avatarId, 1, 999) || !isInt(p.score, 0, 99)) return null;
-  return { id, nickname, avatarId: p.avatarId, score: p.score };
+  // PeerJS's binary encoding turns an absent value into null.
+  if (p.team !== undefined && p.team !== null && !oneOf(p.team, TEAMS)) return null;
+  const player: Player = { id, nickname, avatarId: p.avatarId, score: p.score };
+  if (p.team) player.team = p.team;
+  return player;
 }
 
-// Only the ID is trusted: the name and artwork URL come from this device's own Pokédex, so the
-// other phone can't make it load an arbitrary image or show an arbitrary name.
+// Only the ID and the shiny flag are trusted: the name and artwork URLs come from this device's
+// own Pokédex, so the other phone can't make it load an arbitrary image or show an arbitrary name.
 function validatePokemon(p: unknown): PokemonData | null {
   if (!isObj(p) || !isInt(p.id, 1, 99999)) return null;
-  return getPokemon(p.id);
+  // Absent (or null, as the binary encoding sends undefined) means not shiny; anything else must be a boolean.
+  if (p.shiny != null && typeof p.shiny !== 'boolean') return null;
+  return getPokemon(p.id, p.shiny === true);
 }
 
 function validateSettings(s: unknown): GameSettings | null {
@@ -179,7 +186,9 @@ function validateSettings(s: unknown): GameSettings | null {
     !oneOf(s.winScore, WIN_SCORE_OPTIONS) ||
     !oneOf(s.turnsEach, TURNS_OPTIONS) ||
     typeof s.showArtwork !== 'boolean' ||
-    typeof s.hints !== 'boolean'
+    typeof s.hints !== 'boolean' ||
+    // Settings from a host that predates team mode have no `teams` field: that means off.
+    (s.teams !== undefined && s.teams !== null && typeof s.teams !== 'boolean')
   )
     return null;
   const generations = validateArray(s.generations, 9, (g) => (isInt(g, 1, 9) ? g : null));
@@ -197,6 +206,7 @@ function validateSettings(s: unknown): GameSettings | null {
     types,
     // Absent from older hosts.
     favouritesOnly: s.favouritesOnly === true,
+    teams: s.teams === true,
   };
 }
 

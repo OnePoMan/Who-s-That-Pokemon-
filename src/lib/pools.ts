@@ -1,7 +1,7 @@
 // Which Pokémon a round can pick from beyond difficulty/generation/type: the player's favourites,
 // and the ones they've drawn but failed to get guessed ("redraw your weakest").
 import type { Difficulty, PokemonData } from './game-state';
-import { getPokemon, getPokemonPool, pickRandomPokemon, type PoolFilters } from './pokedex';
+import { getPokemon, getPokemonPool, pickRandomPokemon, rollShiny, type PoolFilters } from './pokedex';
 
 export interface PoolSettings extends PoolFilters {
   /** Only pick from the host's starred Pokémon. */
@@ -34,7 +34,7 @@ export function pickForSettings(
       const excluded = new Set(exclude);
       const fresh = pool.filter((id) => !excluded.has(id));
       const from = fresh.length > 0 ? fresh : pool;
-      return getPokemon(from[Math.floor(rng() * from.length)])!;
+      return getPokemon(from[Math.floor(rng() * from.length)], rollShiny(rng))!;
     }
   }
   return pickRandomPokemon(difficulty, exclude, settings);
@@ -66,7 +66,7 @@ export function pickWeakest(
   let roll = rng() * from.reduce((sum, e) => sum + e.misses, 0);
   for (const e of from) {
     roll -= e.misses;
-    if (roll < 0) return getPokemon(e.pokemonId);
+    if (roll < 0) return getPokemon(e.pokemonId, rollShiny(rng));
   }
-  return getPokemon(from[from.length - 1].pokemonId);
+  return getPokemon(from[from.length - 1].pokemonId, rollShiny(rng));
 }

@@ -2,6 +2,7 @@
 
 import {
   DIFFICULTIES,
+  MIN_TEAM_PLAYERS,
   MEMORIZE_OPTIONS,
   TIMER_OPTIONS,
   TURNS_OPTIONS,
@@ -69,10 +70,20 @@ export default function GameSettingsForm({ settings, onChange, playerCount }: Ga
             value={settings.turnsEach}
             format={(n) => `${n}×`}
             onChange={(v) => set('turnsEach', v)}
-            hint={`${playerCount * settings.turnsEach} rounds · highest score wins`}
+            hint={`${playerCount * settings.turnsEach} rounds · highest ${settings.teams && playerCount >= MIN_TEAM_PLAYERS ? 'team ' : ''}score wins`}
           />
         ) : (
           <OptionRow label="First to" options={WIN_SCORE_OPTIONS} value={settings.winScore} format={(n) => `${n} pts`} onChange={(v) => set('winScore', v)} />
+        )}
+        {playerCount >= MIN_TEAM_PLAYERS && (
+          <OptionRow
+            label="Teams"
+            options={[false, true] as const}
+            value={settings.teams}
+            format={(b) => (b ? 'Red vs Blue' : 'Solo')}
+            onChange={(v) => set('teams', v)}
+            hint={settings.teams ? 'Teams take turns drawing. A correct guess scores a point for the guesser\'s team' : undefined}
+          />
         )}
         <OptionRow
           label="While memorizing, show"

@@ -16,17 +16,29 @@ export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
 
+export type Team = 'red' | 'blue';
+export const TEAMS: readonly Team[] = ['red', 'blue'];
+export const TEAM_NAMES: Record<Team, string> = { red: 'Team Red', blue: 'Team Blue' };
+/** Team mode is only offered from this many players, and each team needs at least MIN_TEAM_SIZE. */
+export const MIN_TEAM_PLAYERS = 4;
+export const MIN_TEAM_SIZE = 2;
+
 export interface Player {
   id: string;
   nickname: string;
   avatarId: number;
   score: number;
+  /** Only set in team mode. */
+  team?: Team;
 }
 
 export interface PokemonData {
   id: number;
   name: string;
+  /** The normal artwork, which the drawer memorizes (see `revealArtworkUrl` for the reveal). */
   artworkUrl: string;
+  /** A rare shiny, decided where the Pokémon is picked; shown only at the reveal. */
+  shiny?: boolean;
 }
 
 export interface GameSettings {
@@ -46,6 +58,8 @@ export interface GameSettings {
   types: string[];
   /** Pick only from the host's starred Pokémon (picking happens on the host). */
   favouritesOnly: boolean;
+  /** Party games with 4+ players: two teams (Red and Blue) compete instead of individuals. */
+  teams: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -59,6 +73,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   generations: [],
   types: [],
   favouritesOnly: false,
+  teams: false,
 };
 
 export interface RoundResult {
@@ -132,14 +147,89 @@ export function isParty(state: Pick<GameState, 'players'>): boolean {
   return state.players.length > 2;
 }
 
+// ---- Teams ---------------------------------------------------------------------------------
+
+/** Default, auto-balanced assignment: players alternate Red, Blue, Red, Blue, … */
+export function autoTeam(index: number): Team {
+  return TEAMS[index % 2];
+}
+
+export function teamCounts(players: Pick<Player, 'team'>[]): Record<Team, number> {
+  return { red: players.filter((p) => p.team === 'red').length, blue: players.filter((p) => p.team === 'blue').length };
+}
+
+/** Why these players can't start a team game, or null if the split is fine. */
+export function teamsProblem(players: Pick<Player, 'team'>[]): string | null {
+  const counts = teamCounts(players);
+  const small = TEAMS.find((t) => counts[t] < MIN_TEAM_SIZE);
+  return small ? `${TEAM_NAMES[small]} needs at least ${MIN_TEAM_SIZE} players (it has ${counts[small]}).` : null;
+}
+
+/** Whether team mode applies: the setting is on, there are enough players and all have a team. */
+export function teamsActive(state: Pick<GameState, 'players' | 'settings'>): boolean {
+  return state.settings.teams && state.players.length >= MIN_TEAM_PLAYERS && state.players.every((p) => p.team !== undefined);
+}
+
+function withoutTeam(player: Player): Player {
+  const copy = { ...player };
+  delete copy.team;
+  return copy;
+}
+
+/**
+ * Gives every player a team (keeping a valid split the host chose, otherwise alternating), or
+ * removes teams when team mode is off or there are too few players.
+ */
+export function resolveTeams(players: Player[], settings: GameSettings): Player[] {
+  if (!settings.teams || players.length < MIN_TEAM_PLAYERS) return players.map((p) => withoutTeam(p));
+  const chosen = players.every((p) => p.team !== undefined) && !teamsProblem(players);
+  return players.map((p, i) => ({ ...p, team: chosen ? p.team : autoTeam(i) }));
+}
+
+/**
+ * Indexes (into players) of who draws each round. Teams alternate Red, Blue, …, and every
+ * player draws turnsEach times; with uneven teams the bigger one draws back to back at the end.
+ */
+export function drawerOrder(players: Player[], turnsEach: number): number[] {
+  const roster = TEAMS.map((t) => players.flatMap((p, i) => (p.team === t ? [i] : [])));
+  const left = roster.map((r) => r.length * turnsEach);
+  const drawn = [0, 0];
+  const order: number[] = [];
+  for (let turn = 0; left[0] + left[1] > 0; turn++) {
+    const team = left[turn % 2] > 0 ? turn % 2 : 1 - (turn % 2);
+    order.push(roster[team][drawn[team]++ % roster[team].length]);
+    left[team]--;
+  }
+  return order;
+}
+
+/** A team's points: each correct round scores 1 for the solver's team (own team or a steal). */
+export function getTeamScores(state: Pick<GameState, 'players' | 'roundResults'>): Record<Team, number> {
+  const scores: Record<Team, number> = { red: 0, blue: 0 };
+  for (const r of state.roundResults) {
+    const team = r.outcome === 'correct' ? state.players.find((p) => p.id === r.solvedBy)?.team : undefined;
+    if (team) scores[team]++;
+  }
+  return scores;
+}
+
+/** True when this round was won by the team that was not drawing. */
+export function isSteal(state: Pick<GameState, 'players'>, result: RoundResult): boolean {
+  const drawerTeam = state.players.find((p) => p.id === result.drawerId)?.team;
+  const solverTeam = state.players.find((p) => p.id === result.solvedBy)?.team;
+  return result.outcome === 'correct' && !!drawerTeam && !!solverTeam && drawerTeam !== solverTeam;
+}
+
 function startRound(state: GameState, pokemon: PokemonData): GameState {
   const round = state.round + 1;
   return {
     ...state,
     phase: 'MEMORIZE',
     round,
-    // Everyone draws in turn: player 1, player 2, … then around again.
-    currentDrawerIndex: (round - 1) % state.players.length,
+    // Everyone draws in turn: player 1, player 2, … then around again. Team games alternate teams.
+    currentDrawerIndex: teamsActive(state)
+      ? (drawerOrder(state.players, state.settings.turnsEach)[round - 1] ?? 0)
+      : (round - 1) % state.players.length,
     currentPokemon: pokemon,
     phaseEndsAt: null,
     outcome: null,
@@ -170,7 +260,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         {
           ...initialGameState,
           mode: action.mode,
-          players: action.players.map((p) => ({ ...p, score: 0 })),
+          players: resolveTeams(action.players, action.settings).map((p) => ({ ...p, score: 0 })),
           settings: action.settings,
         },
         action.pokemon,
@@ -258,6 +348,12 @@ export function isGameFinished(state: GameState): boolean {
 /** Everyone tied for the top score once the game is over (usually one player). */
 export function getWinners(state: GameState): Player[] {
   if (!isGameFinished(state)) return [];
+  if (teamsActive(state)) {
+    // The highest team score wins; a tie is a shared win. Winners are the members of those teams.
+    const scores = getTeamScores(state);
+    const top = Math.max(scores.red, scores.blue);
+    return state.players.filter((p) => p.team && scores[p.team] === top);
+  }
   const top = Math.max(...state.players.map((p) => p.score));
   if (!isParty(state)) return state.players.filter((p) => p.score >= state.settings.winScore);
   return state.players.filter((p) => p.score === top);
@@ -287,6 +383,13 @@ export function guessStreak(state: GameState, playerId: string): number {
     else break;
   }
   return streak;
+}
+
+/** The winning team(s): both on a tie, none before the game is over. */
+export function getWinningTeams(state: GameState): Team[] {
+  if (!teamsActive(state) || !isGameFinished(state)) return [];
+  const scores = getTeamScores(state);
+  return TEAMS.filter((t) => scores[t] === Math.max(scores.red, scores.blue));
 }
 
 export function roundsInGame(state: GameState): number | null {
