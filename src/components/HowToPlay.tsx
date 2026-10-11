@@ -33,6 +33,9 @@ const PAGES: { icon: string; title: string; body: React.ReactNode }[] = [
         <b>2 players:</b> a correct guess scores a point; first to the target wins.
         <br />
         <b>3 or more:</b> the first to guess <i>and</i> the drawer both score. Everyone draws the same number of times and the highest score wins.
+        <br />
+        <b>Teams (4+ players):</b> turn on <i>Teams</i> to play Red vs Blue. Teams take turns drawing. A correct guess scores 1 point for the guesser&apos;s team, so
+        the other team can steal it by guessing first. The best team wins; a tie is a shared win.
       </>
     ),
   },

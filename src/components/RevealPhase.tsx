@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Player, PokemonData, RoundOutcome } from '@/lib/game-state';
+import type { Player, PokemonData, RoundOutcome, Team } from '@/lib/game-state';
 import type { DrawEvent } from '@/lib/canvas-engine';
 import RevealStage from './RevealStage';
 import DrawingReplay from './DrawingReplay';
 import { AvatarIcon } from './AvatarPicker';
 import PokeBallButton from './PokeBallButton';
+import { TeamScores } from './TeamPicker';
 
 export interface SavedDrawing {
   dataUrl: string;
@@ -27,6 +28,10 @@ interface RevealPhaseProps {
   canAssign: boolean;
   onAssign: (playerId: string) => void;
   streaks: Record<string, number>;
+  /** Team mode: the running team totals. */
+  teamScores?: Record<Team, number>;
+  /** Team mode: the team that wasn't drawing guessed it first. */
+  steal?: boolean;
   drawing: SavedDrawing | undefined;
   onNext: () => void;
   nextLabel: string;
@@ -49,6 +54,8 @@ export default function RevealPhase({
   canAssign,
   onAssign,
   streaks,
+  teamScores,
+  steal = false,
   drawing,
   onNext,
   nextLabel,
@@ -63,6 +70,7 @@ export default function RevealPhase({
   }, []);
 
   const head = headline(outcome, solver, awaitingSolver);
+  if (steal && outcome === 'correct' && !awaitingSolver) head.text += ' Steal!';
   const guessers = players.filter((p) => p.id !== drawer.id);
   const box = 'w-[min(55vw,280px,calc((100dvh-340px)/2))] min-w-[140px] aspect-square';
 
@@ -75,7 +83,7 @@ export default function RevealPhase({
           <div className="pokemon-card-body space-y-2 text-center">
             {canAssign ? (
               <>
-                <p className="text-xs font-body font-bold text-ink">Tap who guessed it — they and {drawer.nickname} score a point.</p>
+                <p className="text-xs font-body font-bold text-ink">{teamScores ? 'Tap who guessed it — their team scores a point.' : `Tap who guessed it — they and ${drawer.nickname} score a point.`}</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {guessers.map((p) => (
                     <button
@@ -124,6 +132,7 @@ export default function RevealPhase({
         <RevealStage imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
       </div>
 
+      {teamScores && <TeamScores scores={teamScores} />}
       <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 py-1 font-body" aria-label="Scores">
         {players.map((p) => (
           <li key={p.id}>

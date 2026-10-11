@@ -8,6 +8,7 @@ import {
   DIFFICULTIES,
   MAX_PLAYERS,
   MEMORIZE_OPTIONS,
+  TEAMS,
   TIMER_OPTIONS,
   TURNS_OPTIONS,
   WIN_SCORE_OPTIONS,
@@ -160,7 +161,11 @@ function validatePlayer(p: unknown): Player | null {
   const nickname = cleanText(p.nickname, MAX_NAME_LENGTH);
   const id = cleanText(p.id, 64);
   if (!nickname || !id || !isInt(p.avatarId, 1, 999) || !isInt(p.score, 0, 99)) return null;
-  return { id, nickname, avatarId: p.avatarId, score: p.score };
+  // PeerJS's binary encoding turns an absent value into null.
+  if (p.team !== undefined && p.team !== null && !oneOf(p.team, TEAMS)) return null;
+  const player: Player = { id, nickname, avatarId: p.avatarId, score: p.score };
+  if (p.team) player.team = p.team;
+  return player;
 }
 
 // Only the ID is trusted: the name and artwork URL come from this device's own Pokédex, so the
@@ -179,7 +184,9 @@ function validateSettings(s: unknown): GameSettings | null {
     !oneOf(s.winScore, WIN_SCORE_OPTIONS) ||
     !oneOf(s.turnsEach, TURNS_OPTIONS) ||
     typeof s.showArtwork !== 'boolean' ||
-    typeof s.hints !== 'boolean'
+    typeof s.hints !== 'boolean' ||
+    // Settings from a host that predates team mode have no `teams` field: that means off.
+    (s.teams !== undefined && s.teams !== null && typeof s.teams !== 'boolean')
   )
     return null;
   const generations = validateArray(s.generations, 9, (g) => (isInt(g, 1, 9) ? g : null));
@@ -195,6 +202,7 @@ function validateSettings(s: unknown): GameSettings | null {
     hints: s.hints,
     generations,
     types,
+    teams: s.teams === true,
   };
 }
 

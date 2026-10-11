@@ -20,6 +20,8 @@ After each round the answer is revealed anime-style — a silhouette over a blue
 
 **Scoring.** With two players, the guesser scores a point for a correct guess and the first to 3/5/7 points wins. With three or more, the first player to guess and the drawer each score a point (on a shared phone you tap who got it), everyone draws the same number of times (1–3 turns each), and the highest score wins; ties share the win.
 
+**Team mode** (optional setting, 4 or more players). Players split into Team Red and Team Blue, auto-balanced by alternating; in the lobby the host can tap a player to swap their team, and each team needs at least 2 players. Teams take turns drawing (Red, Blue, Red, …) and everyone still draws the chosen number of times (with uneven teams the larger team draws back to back at the end). A correct guess scores 1 point for the *guesser's* team: the drawer's team if a teammate guessed it, or the other team if they got it first (a "steal"). Individual scores are still tracked for stats. The highest team score wins; a tie is a shared win.
+
 **Drawing tools:** pen (pressure-sensitive with a stylus), eraser, fill, line, rectangle, circle, eyedropper, any custom colour (recent colours are remembered), four brush sizes, undo/redo and clear. Pinch with two fingers (or Ctrl/⌘ + scroll) to zoom in for detail; guessers and the TV screen can zoom too.
 
 **Hints** (on by default): letter blanks from the start, the Pokémon's type and generation at the halfway mark, and its first letter with 15 seconds left.
