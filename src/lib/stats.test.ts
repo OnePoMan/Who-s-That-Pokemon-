@@ -76,6 +76,16 @@ describe('stats', () => {
     expect(awardAchievements(first.stats, 2000).unlocked).toEqual([]);
   });
 
+  it('awards Shiny Hunter for a shiny reveal, in rounds and solo drawings', () => {
+    const plain = recordRound(EMPTY_STATS, { pokemonId: 25, outcome: 'correct', quick: false, streak: 1 });
+    expect(awardAchievements(plain, 1).unlocked.map((a) => a.id)).not.toContain('shiny-hunter');
+    const shiny = recordRound(EMPTY_STATS, { pokemonId: 25, outcome: 'timeout', quick: false, streak: 0, shiny: true });
+    expect(shiny.shinySeen).toBe(1);
+    expect(awardAchievements(shiny, 1).unlocked.map((a) => a.id)).toContain('shiny-hunter');
+    expect(recordSolo(EMPTY_STATS, 25, true).shinySeen).toBe(1);
+    expect(parseStats({ shinySeen: 2 }).shinySeen).toBe(2);
+  });
+
   it('can unlock every badge', () => {
     const s = {
       ...EMPTY_STATS,
@@ -86,6 +96,7 @@ describe('stats', () => {
       quickDraws: 1,
       bestStreak: 5,
       soloDrawings: 10,
+      shinySeen: 1,
       discovered: DEX_ORDER.map((e) => e.id),
       daily: { ...EMPTY_STATS.daily, played: 7, best: 7 },
     };

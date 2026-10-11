@@ -90,7 +90,7 @@ export default function GuessInput({ onGuess, disabled = false, placeholder = 'S
           ))}
         </ul>
       )}
-      <div className="flex rounded-xl border-3 border-line overflow-hidden bg-surface">
+      <div className="flex rounded-xl border-3 border-line overflow-hidden bg-surface focus-within:ring-2 focus-within:ring-pokemon-blue">
         <input
           type="text"
           role="combobox"

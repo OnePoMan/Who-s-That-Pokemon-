@@ -12,6 +12,8 @@ export interface CollectedDrawing {
   source: DrawingSource;
   outcome: RoundOutcome | 'done';
   drawnAt: number;
+  /** Whether the Pokémon was shiny at the reveal (absent on older entries). */
+  shiny?: boolean;
 }
 
 const DB_NAME = 'wtp-pokedex';

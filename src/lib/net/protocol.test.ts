@@ -94,6 +94,28 @@ describe('validateMessage', () => {
     });
   });
 
+  it('accepts a boolean shiny flag but still rebuilds the artwork URL locally', () => {
+    const shiny = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, shiny: true } }, 'p1', 0);
+    const msg = validateMessage({ t: 'state', state: shiny });
+    expect(msg?.t === 'state' && msg.state.currentPokemon).toEqual({
+      id: 25,
+      name: 'Pikachu',
+      artworkUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png',
+      shiny: true,
+    });
+    const plain = validateMessage({ t: 'state', state: toWire(state, 'p1', 0) });
+    expect(plain?.t === 'state' && plain.state.currentPokemon?.shiny).toBeUndefined();
+    const nulled = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, shiny: null as unknown as boolean } }, 'p1', 0);
+    expect(validateMessage({ t: 'state', state: nulled })).not.toBeNull();
+  });
+
+  it('rejects a non-boolean shiny flag', () => {
+    for (const shiny of ['true', 1, {}, 'https://evil.example/x.png']) {
+      const bad = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, shiny: shiny as unknown as boolean } }, 'p1', 0);
+      expect(validateMessage({ t: 'state', state: bad })).toBeNull();
+    }
+  });
+
   it('rejects unknown Pokémon IDs', () => {
     const bad = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, id: 99999 } }, 'p1', 0);
     expect(validateMessage({ t: 'state', state: bad })).toBeNull();
@@ -128,6 +150,39 @@ describe('rooms with several phones', () => {
 
   it('hides the answer from spectators too', () => {
     expect(toWire(state, 'spectator', 0).currentPokemon).toBeNull();
+  });
+});
+
+describe('team mode on the wire', () => {
+  const teamPlayers = (['red', 'blue', 'red', 'blue'] as const).map((team, i) => ({ id: `p${i + 1}`, nickname: `P${i + 1}`, avatarId: i + 1, score: 0, team }));
+  const teamState: GameState = { ...state, players: teamPlayers, settings: { ...DEFAULT_SETTINGS, teams: true } };
+  const settingsOf = (wireSettings: unknown) => {
+    const msg = validateMessage({ t: 'state', state: { ...toWire(teamState, 'p1', 0), settings: wireSettings } });
+    return msg?.t === 'state' ? msg.state.settings : null;
+  };
+
+  it('round-trips the teams setting and each player\'s team', () => {
+    const msg = validateMessage({ t: 'state', state: toWire(teamState, 'p1', 0) });
+    expect(msg?.t === 'state' && msg.state.settings.teams).toBe(true);
+    expect(msg?.t === 'state' && msg.state.players.map((p) => p.team)).toEqual(['red', 'blue', 'red', 'blue']);
+  });
+
+  it('treats settings without the field (older hosts) as teams off', () => {
+    const old: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+    delete old.teams;
+    expect(settingsOf(old)?.teams).toBe(false);
+    expect(settingsOf({ ...old, teams: null })?.teams).toBe(false);
+  });
+
+  it('rejects a non-boolean teams setting or an unknown team', () => {
+    expect(settingsOf({ ...DEFAULT_SETTINGS, teams: 'yes' })).toBeNull();
+    const bad = toWire({ ...teamState, players: teamPlayers.map((p, i) => (i === 0 ? { ...p, team: 'green' as never } : p)) }, 'p1', 0);
+    expect(validateMessage({ t: 'state', state: bad })).toBeNull();
+  });
+
+  it('keeps teams in lobby messages and accepts players without one', () => {
+    const msg = validateMessage({ t: 'lobby', players: [...teamPlayers.slice(0, 3), { id: 'p4', nickname: 'P4', avatarId: 4, score: 0, team: null }], youId: 'p1', hostToken: 't', spectators: 0 });
+    expect(msg?.t === 'lobby' && msg.players.map((p) => p.team)).toEqual(['red', 'blue', 'red', undefined]);
   });
 });
 

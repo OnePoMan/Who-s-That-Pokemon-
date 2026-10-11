@@ -5,7 +5,7 @@ import PokeBallButton from './PokeBallButton';
 import PokemonSilhouette from './PokemonSilhouette';
 import ConfirmDialog from './ConfirmDialog';
 import TypeBadge from './TypeBadge';
-import { DEX_ORDER, GENERATIONS, REGIONS, TYPES, artworkUrl, type DexEntryInfo } from '@/lib/pokedex';
+import { DEX_ORDER, GENERATIONS, REGIONS, TYPES, artworkUrl, revealArtworkUrl, type DexEntryInfo } from '@/lib/pokedex';
 import { clearDrawings, deleteDrawing, getDrawingImage, listDrawings, type CollectedDrawing } from '@/lib/collection';
 import { ACHIEVEMENTS, currentDailyStreak, isUnlocked, mostDrawn, type Stats } from '@/lib/stats';
 import { dateKey } from '@/lib/daily';
@@ -189,7 +189,12 @@ function DexGrid({
                   </div>
                   <div className="px-1.5 py-1 font-body leading-tight">
                     <span className="block text-[10px] text-ink-muted">#{String(e.number).padStart(4, '0')}</span>
-                    <span className="block text-[11px] font-bold text-ink truncate">{seen ? e.name : '???'}</span>
+                    <span className="block text-[11px] font-bold text-ink truncate">
+                      {seen ? e.name : '???'}
+                      {mine?.some((d) => d.shiny) && (
+                        <span title="Shiny" role="img" aria-label="Shiny"> ✨</span>
+                      )}
+                    </span>
                   </div>
                 </button>
               </li>
@@ -333,6 +338,7 @@ function DexDetail({
                   <p className="text-[10px] text-ink-muted">
                     {new Date(d.drawnAt).toLocaleDateString()} · {SOURCE_LABEL[d.source]}
                     {OUTCOME_LABEL[d.outcome] && ` · ${OUTCOME_LABEL[d.outcome]}`}
+                    {d.shiny && ' · ✨ Shiny'}
                   </p>
                   <div className="flex gap-1">
                     <button type="button" onClick={() => void withImage(d, (url) => downloadUrl(url, filename(d)))} className="flex-1 py-1 rounded-lg text-[10px] font-bold text-accent bg-blue-50 hover:bg-blue-100 border border-pokemon-blue/20">
@@ -343,7 +349,7 @@ function DexDetail({
                       onClick={() =>
                         void withImage(d, async (url) => {
                           try {
-                            const blob = await composeComparison(url, artworkUrl(entry.id), `${d.artist} drew ${entry.name}`);
+                            const blob = await composeComparison(url, revealArtworkUrl({ id: entry.id, artworkUrl: artworkUrl(entry.id), shiny: d.shiny }), `${d.artist} drew ${entry.name}`);
                             if ((await shareOrDownload(blob, filename(d), `${d.artist} drew ${entry.name} in Who's That Pokémon?`)) === 'downloaded') onNotice('Image saved to your downloads.');
                           } catch {
                             onNotice('Could not create the image.');
