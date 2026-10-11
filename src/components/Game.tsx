@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import Lobby from './Lobby';
 import RemoteLobby from './RemoteLobby';
+import { withTeams } from './TeamPicker';
 import MemorizePhase from './MemorizePhase';
 import DrawingPhase from './DrawingPhase';
 import RevealPhase, { type SavedDrawing } from './RevealPhase';
@@ -20,7 +21,7 @@ import HowToPlay, { hasSeenGuide } from './HowToPlay';
 import { usePrefs } from '@/hooks/usePrefs';
 import { useProgress } from '@/hooks/useProgress';
 import { useSound } from '@/hooks/useSound';
-import { useRoom, type HelloMessage } from '@/hooks/useRoom';
+import { useRoom, versionMismatchNotice, type HelloMessage } from '@/hooks/useRoom';
 import { useNow, useWakeLock } from '@/hooks/useDeviceHelpers';
 import { vibrate } from '@/lib/prefs';
 import { isCorrectGuess, pickRandomPokemon, revealArtworkUrl } from '@/lib/pokedex';
@@ -55,12 +56,14 @@ import {
   isGameFinished,
   isParty,
   isSteal,
+  MIN_TEAM_PLAYERS,
   teamsActive,
   TEAM_NAMES,
   type GameSettings,
   type GameState,
   type Player,
   type RoundOutcome,
+  type Team,
 } from '@/lib/game-state';
 
 const HOST_ID = 'p1';
@@ -126,6 +129,8 @@ export default function Game() {
   } | null>(null);
   const myIdRef = useRef(HOST_ID);
   const lobbyRef = useRef<Player[]>([]);
+  // Host: the team setting from the lobby screen, shared with guests as it changes.
+  const lobbyTeamsRef = useRef<{ on: boolean; chosen: Record<string, Team> }>({ on: false, chosen: {} });
 
   useEffect(() => {
     stateRef.current = state;
@@ -312,9 +317,16 @@ export default function Game() {
   /** Which player (or spectator) a phone is. */
   const viewerOf = (clientId: string) => clientPlayersRef.current.get(clientId) ?? SPECTATOR_ID;
 
+  /** Lobby only: the roster with the host's current team split applied, when team mode is on. */
+  const rosterWithTeams = (players: Player[]): Player[] => {
+    if (stateRef.current.phase !== 'LOBBY') return players;
+    const { on, chosen } = lobbyTeamsRef.current;
+    return on && players.length >= MIN_TEAM_PLAYERS ? withTeams(players, chosen) : players.map((p) => ({ ...p, team: undefined }));
+  };
+
   const lobbyMessage = (clientId: string, players: Player[]): Message => ({
     t: 'lobby',
-    players,
+    players: rosterWithTeams(players),
     youId: viewerOf(clientId),
     hostToken: (hostTokenRef.current ??= randomString(24)),
     spectators: spectatorsRef.current.size,
@@ -516,7 +528,7 @@ export default function Game() {
     }
   };
 
-  const room = useRoom(handleMessage, admit);
+  const room = useRoom(handleMessage, admit, (guestVersion) => setNotice(versionMismatchNotice(guestVersion)));
   useEffect(() => {
     roomRef.current = room;
     lobbyRef.current = lobbyPlayers;
@@ -720,6 +732,14 @@ export default function Game() {
     beginRoundTimers('remote');
   };
 
+  /** Host: the lobby's team setting changed; guests and TV screens get the new split at once. */
+  const shareTeamSetup = useCallback((on: boolean, chosen: Record<string, Team>) => {
+    lobbyTeamsRef.current = { on, chosen };
+    if (stateRef.current.phase !== 'LOBBY') return;
+    roomRef.current?.broadcast((id) => lobbyMessage(id, lobbyRef.current));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const hostRoom = (name: string, avatarId: number) => {
     sound.startBgm();
     const me: Player = { id: HOST_ID, nickname: name, avatarId, score: 0 };
@@ -729,6 +749,7 @@ export default function Game() {
     myIdRef.current = HOST_ID;
     clientPlayersRef.current.clear();
     spectatorsRef.current.clear();
+    lobbyTeamsRef.current = { on: false, chosen: {} };
     void room.host();
   };
 
@@ -925,6 +946,7 @@ export default function Game() {
             onJoin={joinRoom}
             onStart={startRemote}
             onBack={goHome}
+            onTeamSetup={shareTeamSetup}
           />
         )}
 

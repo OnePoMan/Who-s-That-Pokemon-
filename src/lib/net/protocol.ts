@@ -7,6 +7,7 @@ import type { Hint } from '../hints';
 import {
   DIFFICULTIES,
   MAX_PLAYERS,
+  MIN_TEAM_PLAYERS,
   MEMORIZE_OPTIONS,
   TEAMS,
   TIMER_OPTIONS,
@@ -21,7 +22,12 @@ import {
   type RoundResult,
 } from '../game-state';
 
-export const PROTOCOL_VERSION = 3;
+/**
+ * Bumped whenever the wire format changes in a way an older phone would silently mishandle
+ * (4: team assignments in the lobby message, shiny flag and team mode in the game state).
+ * A host turns away a phone with a different version and a guest turns away a different host.
+ */
+export const PROTOCOL_VERSION = 4;
 /** Big-screen spectators (e.g. a TV browser) that watch but don't play. */
 export const MAX_SPECTATORS = 4;
 export const SPECTATOR_ID = 'spectator';
@@ -50,8 +56,10 @@ export type RejectReason = 'full' | 'version' | 'started';
 export type Message =
   | { t: 'hello'; v: number; clientId: string; role: Role; name: string; avatarId: number }
   // hostToken lets a reconnecting guest tell the real host from someone who took over the code.
+  // Players carry their team when the host has team mode on (all of them, or none).
   | { t: 'lobby'; players: Player[]; youId: string; hostToken: string; spectators: number }
-  | { t: 'reject'; reason: RejectReason }
+  // hostVersion lets the phone say whether the room is older or newer; older hosts omit it.
+  | { t: 'reject'; reason: RejectReason; hostVersion?: number }
   | { t: 'state'; state: WireState }
   | { t: 'intent'; intent: Intent }
   | { t: 'assign'; playerId: string }
@@ -312,10 +320,19 @@ export function validateMessage(raw: unknown): Message | null {
       const youId = cleanText(raw.youId, 64);
       const hostToken = cleanText(raw.hostToken, 64);
       if (!isInt(raw.spectators, 0, MAX_SPECTATORS)) return null;
+      if (!players) return null;
+      // Team assignments are all or nothing, for at least the minimum team-mode size, and each
+      // one is a seat in this very roster, so a bad message can't invent or leave out players.
+      const teamed = players.filter((p) => p.team).length;
+      if (teamed !== 0 && (teamed !== players.length || players.length < MIN_TEAM_PLAYERS)) return null;
+      if (new Set(players.map((p) => p.id)).size !== players.length) return null;
       return players && youId && hostToken ? { t: 'lobby', players, youId, hostToken, spectators: raw.spectators } : null;
     }
-    case 'reject':
-      return oneOf(raw.reason, ['full', 'version', 'started'] as const) ? { t: 'reject', reason: raw.reason } : null;
+    case 'reject': {
+      if (!oneOf(raw.reason, ['full', 'version', 'started'] as const)) return null;
+      if (raw.hostVersion === undefined || raw.hostVersion === null) return { t: 'reject', reason: raw.reason };
+      return isInt(raw.hostVersion, 0, 999) ? { t: 'reject', reason: raw.reason, hostVersion: raw.hostVersion } : null;
+    }
     case 'react':
       return oneOf(raw.emoji, REACTIONS) ? { t: 'react', emoji: raw.emoji } : null;
     case 'reaction': {

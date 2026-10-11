@@ -48,11 +48,26 @@ const SILENCE_TIMEOUT_MS = 15000;
 const MAX_PENDING_CONNECTIONS = 3;
 const MAX_GUEST_CONNECTIONS = MAX_PLAYERS - 1 + 4;
 
-const REJECT_TEXT: Record<RejectReason, string> = {
-  full: 'That room is full.',
-  started: "That game has already started. If you were playing and dropped out, join again with the exact name you were playing as. Otherwise, join as a TV screen to watch.",
-  version: 'The host is on a different version. Refresh every phone and try again.',
-};
+/** Why a guest was turned away; `hostVersion` (when the host says) tells older from newer. */
+export function rejectText(reason: RejectReason, hostVersion?: number): string {
+  switch (reason) {
+    case 'full':
+      return 'That room is full.';
+    case 'started':
+      return "That game has already started. If you were playing and dropped out, join again with the exact name you were playing as. Otherwise, join as a TV screen to watch.";
+    case 'version':
+      if (hostVersion !== undefined && hostVersion > PROTOCOL_VERSION) return 'This room is running a newer version of the game. Reload this page to update, then join again.';
+      if (hostVersion !== undefined && hostVersion < PROTOCOL_VERSION) return 'This room is running an older version of the game. Ask the host to reload their page, then join again.';
+      return 'This room is running a different version of the game. Reload the page on every phone and try again.';
+  }
+}
+
+/** Shown on the host when a phone with another version tried to join. */
+export function versionMismatchNotice(guestVersion: number): string {
+  return guestVersion > PROTOCOL_VERSION
+    ? 'A player tried to join with a newer version of the game. Reload this page to update.'
+    : 'A player tried to join with an older version of the game. Ask them to reload their page.';
+}
 
 // Optional self-hosted PeerJS server (e.g. `npx peer --port 9000`). Unset = PeerJS's free cloud.
 function brokerOptions(): PeerOptions {
@@ -83,8 +98,13 @@ function clientId(): string {
  * @param onMessage receives every validated message; `from` is the sending phone's client id
  *   on the host (taken from the connection, never from the message), or null on a guest.
  * @param admit host only: rules for letting a phone in.
+ * @param onVersionMismatch host only: a phone running another protocol version was turned away.
  */
-export function useRoom(onMessage: (msg: Message, from: string | null) => void, admit: Admit) {
+export function useRoom(
+  onMessage: (msg: Message, from: string | null) => void,
+  admit: Admit,
+  onVersionMismatch?: (guestVersion: number) => void,
+) {
   const [status, setStatus] = useState<RoomStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
@@ -99,9 +119,11 @@ export function useRoom(onMessage: (msg: Message, from: string | null) => void, 
   const closedByUser = useRef(false);
   const onMessageRef = useRef(onMessage);
   const admitRef = useRef(admit);
+  const mismatchRef = useRef(onVersionMismatch);
   useEffect(() => {
     onMessageRef.current = onMessage;
     admitRef.current = admit;
+    mismatchRef.current = onVersionMismatch;
   });
 
   const fail = useCallback((message: string) => {
@@ -259,7 +281,7 @@ export function useRoom(onMessage: (msg: Message, from: string | null) => void, 
           settle();
         }, HELLO_TIMEOUT_MS);
         const reject = (reason: RejectReason) => {
-          conn.send({ t: 'reject', reason } satisfies Message);
+          conn.send({ t: 'reject', reason, hostVersion: PROTOCOL_VERSION } satisfies Message);
           setTimeout(() => conn.close(), 200);
         };
 
@@ -285,6 +307,7 @@ export function useRoom(onMessage: (msg: Message, from: string | null) => void, 
               if (msg.t !== 'hello') return false;
               if (msg.v !== PROTOCOL_VERSION) {
                 reject('version');
+                mismatchRef.current?.(msg.v);
                 return false;
               }
               const returning = guestConnsRef.current.has(msg.clientId);
@@ -358,7 +381,7 @@ export function useRoom(onMessage: (msg: Message, from: string | null) => void, 
                 return false;
               }
               closedByUser.current = true;
-              fail(REJECT_TEXT[msg.reason]);
+              fail(rejectText(msg.reason, msg.hostVersion));
               return false;
             }
             return true;

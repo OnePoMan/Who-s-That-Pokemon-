@@ -27,21 +27,25 @@ export function teamStartProblem(players: Pick<Player, 'id'>[], chosen: Record<s
   return teamsProblem(withTeams(players, chosen));
 }
 
+const PLAYER_CHIP = 'w-full flex items-center gap-1.5 rounded-lg bg-surface px-1.5 py-1 font-body text-sm font-bold text-ink';
+
 interface TeamPickerProps {
   players: Pick<Player, 'id' | 'nickname' | 'avatarId'>[];
   chosen: Record<string, Team>;
   /** Called with the full assignment after the host taps a player to swap their team. */
-  onChange: (chosen: Record<string, Team>) => void;
+  onChange?: (chosen: Record<string, Team>) => void;
+  /** Guests and TV screens see the host's teams but can't change them. */
+  readOnly?: boolean;
 }
 
 /** Red and Blue rosters; tapping a player moves them to the other team. */
-export default function TeamPicker({ players, chosen, onChange }: TeamPickerProps) {
+export default function TeamPicker({ players, chosen, onChange, readOnly = false }: TeamPickerProps) {
   const teams = teamAssignment(
     players.map((p) => p.id),
     chosen,
   );
-  const problem = teamStartProblem(players, chosen);
-  const swap = (id: string) => onChange({ ...teams, [id]: teams[id] === 'red' ? 'blue' : 'red' });
+  const problem = readOnly ? null : teamStartProblem(players, chosen);
+  const swap = (id: string) => onChange?.({ ...teams, [id]: teams[id] === 'red' ? 'blue' : 'red' });
 
   return (
     <section className="w-full space-y-2" aria-label="Teams">
@@ -56,24 +60,35 @@ export default function TeamPicker({ players, chosen, onChange }: TeamPickerProp
                 .filter((p) => teams[p.id] === team)
                 .map((p) => (
                   <li key={p.id}>
-                    <button
-                      type="button"
-                      onClick={() => swap(p.id)}
-                      aria-label={`${p.nickname}, ${TEAM_NAMES[team]}. Tap to move to ${TEAM_NAMES[team === 'red' ? 'blue' : 'red']}`}
-                      className="w-full flex items-center gap-1.5 rounded-lg bg-surface px-1.5 py-1 font-body text-sm font-bold text-ink hover:bg-surface-2 active:scale-95 transition"
-                    >
-                      <AvatarIcon avatarId={p.avatarId} size="sm" />
-                      <span className="truncate">{p.nickname}</span>
-                    </button>
+                    {readOnly ? (
+                      <div className={PLAYER_CHIP}>
+                        <AvatarIcon avatarId={p.avatarId} size="sm" />
+                        <span className="truncate">{p.nickname}</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => swap(p.id)}
+                        aria-label={`${p.nickname}, ${TEAM_NAMES[team]}. Tap to move to ${TEAM_NAMES[team === 'red' ? 'blue' : 'red']}`}
+                        className={`${PLAYER_CHIP} hover:bg-surface-2 active:scale-95 transition`}
+                      >
+                        <AvatarIcon avatarId={p.avatarId} size="sm" />
+                        <span className="truncate">{p.nickname}</span>
+                      </button>
+                    )}
                   </li>
                 ))}
             </ul>
           </div>
         ))}
       </div>
-      <p className={`text-[11px] text-center font-body ${problem ? 'font-bold text-accent-red' : 'text-ink-muted'}`} role={problem ? 'alert' : undefined}>
-        {problem ?? 'Tap a player to swap their team.'}
-      </p>
+      {readOnly ? (
+        <p className="text-[11px] text-center font-body text-ink-muted">The host picks the teams.</p>
+      ) : (
+        <p className={`text-[11px] text-center font-body ${problem ? 'font-bold text-accent-red' : 'text-ink-muted'}`} role={problem ? 'alert' : undefined}>
+          {problem ?? 'Tap a player to swap their team.'}
+        </p>
+      )}
     </section>
   );
 }

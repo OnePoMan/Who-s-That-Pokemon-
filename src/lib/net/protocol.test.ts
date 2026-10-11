@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanText, fromWire, generateRoomCode, normalizeRoomCode, toWire, validateMessage, ROOM_ALPHABET } from './protocol';
+import { PROTOCOL_VERSION, cleanText, fromWire, generateRoomCode, normalizeRoomCode, toWire, validateMessage, ROOM_ALPHABET } from './protocol';
 import { DEFAULT_SETTINGS, initialGameState, type GameState } from '../game-state';
 import { safeFilename } from '../share';
 
@@ -180,9 +180,45 @@ describe('team mode on the wire', () => {
     expect(validateMessage({ t: 'state', state: bad })).toBeNull();
   });
 
-  it('keeps teams in lobby messages and accepts players without one', () => {
-    const msg = validateMessage({ t: 'lobby', players: [...teamPlayers.slice(0, 3), { id: 'p4', nickname: 'P4', avatarId: 4, score: 0, team: null }], youId: 'p1', hostToken: 't', spectators: 0 });
-    expect(msg?.t === 'lobby' && msg.players.map((p) => p.team)).toEqual(['red', 'blue', 'red', undefined]);
+  describe('lobby team assignments', () => {
+    const lobby = (players: unknown[]) => validateMessage({ t: 'lobby', players, youId: 'p1', hostToken: 't', spectators: 0 });
+
+    it('keeps the host\'s teams', () => {
+      const msg = lobby(teamPlayers);
+      expect(msg?.t === 'lobby' && msg.players.map((p) => p.team)).toEqual(['red', 'blue', 'red', 'blue']);
+    });
+
+    it('accepts a roster with no teams, including nulls from the binary encoding', () => {
+      const msg = lobby(teamPlayers.map((p) => ({ ...p, team: null })));
+      expect(msg?.t === 'lobby' && msg.players.every((p) => p.team === undefined)).toBe(true);
+    });
+
+    it('rejects partial assignments, unknown teams, duplicate ids and too-small rooms', () => {
+      expect(lobby([...teamPlayers.slice(0, 3), { ...teamPlayers[3], team: null }])).toBeNull();
+      expect(lobby(teamPlayers.map((p, i) => (i === 0 ? { ...p, team: 'green' } : p)))).toBeNull();
+      expect(lobby(teamPlayers.map((p, i) => (i === 3 ? { ...p, id: 'p1' } : p)))).toBeNull();
+      expect(lobby(teamPlayers.slice(0, 3))).toBeNull();
+      expect(lobby([...teamPlayers, ...teamPlayers.map((p) => ({ ...p, id: p.id + 'x' })), { ...teamPlayers[0], id: 'p9' }])).toBeNull();
+    });
+  });
+});
+
+describe('protocol version', () => {
+  it('is 4 or later, so phones from before team lobbies and shiny reveals are turned away', () => {
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(4);
+  });
+
+  it('carries the version in hello and, optionally, in reject', () => {
+    const hello = { t: 'hello', v: 3, clientId: 'c', role: 'player', name: 'Ash', avatarId: 1 };
+    expect(validateMessage(hello)).toMatchObject({ t: 'hello', v: 3 });
+    expect(validateMessage({ t: 'reject', reason: 'version' })).toEqual({ t: 'reject', reason: 'version' });
+    expect(validateMessage({ t: 'reject', reason: 'version', hostVersion: PROTOCOL_VERSION })).toEqual({
+      t: 'reject',
+      reason: 'version',
+      hostVersion: PROTOCOL_VERSION,
+    });
+    expect(validateMessage({ t: 'reject', reason: 'version', hostVersion: 'new' })).toBeNull();
+    expect(validateMessage({ t: 'reject', reason: 'nope' })).toBeNull();
   });
 });
 
