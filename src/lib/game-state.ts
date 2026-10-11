@@ -56,6 +56,8 @@ export interface GameSettings {
   generations: number[];
   /** Empty = all types. */
   types: string[];
+  /** Pick only from the host's starred Pokémon (picking happens on the host). */
+  favouritesOnly: boolean;
   /** Party games with 4+ players: two teams (Red and Blue) compete instead of individuals. */
   teams: boolean;
 }
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   hints: true,
   generations: [],
   types: [],
+  favouritesOnly: false,
   teams: false,
 };
 

@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS, MIN_TEAM_PLAYERS, type GameSettings, type Player, typ
 import { MAX_NAME_LENGTH, ROOM_CODE_LENGTH, SPECTATOR_ID, normalizeRoomCode } from '@/lib/net/protocol';
 import { MAX_PLAYERS } from '@/lib/game-state';
 import { shareInvite } from '@/lib/share';
+import { useFavouritePoolEmpty } from '@/hooks/useFavourites';
 import type { RoomStatus } from '@/hooks/useRoom';
 
 interface RemoteLobbyProps {
@@ -39,6 +40,7 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
   const [mode, setMode] = useState<'choose' | 'join'>(initialCode ? 'join' : 'choose');
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
   const [copied, setCopied] = useState(false);
+  const poolEmpty = useFavouritePoolEmpty(settings);
   const [chosenTeams, setChosenTeams] = useState<Record<string, Team>>({});
 
   const inRoom = status !== 'idle' && status !== 'error';
@@ -110,7 +112,7 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
           <PokeBallButton onClick={onBack} variant="gray" size="md" className="flex-1">
             Leave
           </PokeBallButton>
-          <PokeBallButton onClick={start} variant="red" size="lg" className="flex-1" disabled={players.length < 2 || !!teamProblem}>
+          <PokeBallButton onClick={start} variant="red" size="lg" className="flex-1" disabled={players.length < 2 || !!teamProblem || poolEmpty}>
             Start battle!
           </PokeBallButton>
         </div>

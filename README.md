@@ -14,6 +14,8 @@ A drawing and guessing game for 2–8 players. One player gets a few seconds to 
 
 **Solo practice.** Pick a difficulty and filters, then draw at your own pace with no timer and compare with the official artwork.
 
+**Favourites and weakest practice.** Tap the star on a drawn Pokémon in the Pokédex to favourite it (the Favourites chip filters the grid). Battle settings and solo practice then offer *Pool: Favourites only*, which picks only from your starred Pokémon that also match the difficulty, generation and type filters (in multi-phone play only the host's favourites count). Solo practice also has *My weakest*: it redraws Pokémon you drew in games that nobody guessed, most-missed first with some randomness.
+
 **Pokédex, stats and badges.** Every drawing made or watched on the phone — in games, the daily and solo practice — is saved to its Pokédex (all 1,175 Pokémon and forms, filterable by generation and type), where you can see, save, share or delete each one. The Stats tab tracks games, rounds guessed, streaks, most-drawn Pokémon and more, and there are 18 badges to earn.
 
 After each round the answer is revealed anime-style — a silhouette over a blue burst that flashes into the official artwork, with the Pokémon's cry — with a timelapse replay and a share card. Now and then (1 in 64) the Pokémon is a **shiny**: the drawer still memorizes the normal colours, but the reveal flashes into the shiny artwork with a sparkling "Shiny!" label, and the Pokédex marks that drawing. Every drawing from the session is in the gallery (settings menu, or at the end of the game) to download or share.

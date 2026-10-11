@@ -6,11 +6,13 @@ import PokemonSilhouette from './PokemonSilhouette';
 import RevealStage from './RevealStage';
 import PokeBallButton from './PokeBallButton';
 import Timer from './Timer';
-import { DIFFICULTY_HINT, OptionRow, PoolFilterFields } from './GameSettingsForm';
+import { DIFFICULTY_HINT, OptionRow, PoolFilterFields, favouritesHint } from './GameSettingsForm';
+import { useFavourites } from '@/hooks/useFavourites';
 import { useNow } from '@/hooks/useDeviceHelpers';
 import type { SoundName } from '@/hooks/useSound';
 import { DIFFICULTIES, type Difficulty, type PokemonData } from '@/lib/game-state';
-import { getPokemonPool, pickRandomPokemon, revealArtworkUrl } from '@/lib/pokedex';
+import { revealArtworkUrl } from '@/lib/pokedex';
+import { getCustomPool, pickForSettings, pickWeakest, rankWeakest } from '@/lib/pools';
 import { addDrawing, getDrawingImage } from '@/lib/collection';
 import {
   DAILY_DRAW_SECONDS,
@@ -45,6 +47,10 @@ interface Finished {
 
 const RECENT_LIMIT = 30;
 
+type SoloPool = 'all' | 'favourites' | 'weakest';
+const POOLS: readonly SoloPool[] = ['all', 'favourites', 'weakest'];
+const POOL_LABEL: Record<SoloPool, string> = { all: 'All matching', favourites: 'Favourites', weakest: 'My weakest' };
+
 /**
  * Drawing on your own: untimed solo practice, or the daily challenge (a short memorize, then a
  * timed drawing from memory, once per day). Every finished drawing goes into the Pokédex.
@@ -57,6 +63,8 @@ export default function SoloPlay({ kind, stats, updateStats, play, playCry, onNo
   const [stage, setStage] = useState<Stage>('setup');
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
   const [filters, setFilters] = useState<{ generations: number[]; types: string[] }>({ generations: [], types: [] });
+  const [pool, setPool] = useState<SoloPool>('all');
+  const { favourites } = useFavourites();
   const [pokemon, setPokemon] = useState<PokemonData | null>(null);
   const [recent, setRecent] = useState<number[]>([]);
   const [endsAt, setEndsAt] = useState<number | null>(null);
@@ -77,7 +85,19 @@ export default function SoloPlay({ kind, stats, updateStats, play, playCry, onNo
     play('whoosh');
   };
 
-  const nextSolo = () => begin(pickRandomPokemon(difficulty, recent, filters));
+  const weakest = rankWeakest(stats.missedCount);
+  const favouritesOnly = pool === 'favourites';
+  const matching = getCustomPool(difficulty, { ...filters, favouritesOnly }, favourites).length;
+  // "Favourites" with nothing to pick, or "My weakest" with nothing missed yet, can't start.
+  const cannotStart = pool === 'weakest' ? weakest.length === 0 : favouritesOnly && matching === 0;
+
+  const nextSolo = () => {
+    const next =
+      pool === 'weakest'
+        ? pickWeakest(stats.missedCount, recent)
+        : pickForSettings(difficulty, recent, { ...filters, favouritesOnly }, favourites);
+    if (next) begin(next);
+  };
 
   const startDrawing = () => {
     finishingRef.current = false;
@@ -156,26 +176,45 @@ export default function SoloPlay({ kind, stats, updateStats, play, playCry, onNo
         <div className="pokemon-card w-full">
           <div className="pokemon-card-body space-y-4">
             <OptionRow
-              label="Difficulty"
-              options={DIFFICULTIES}
-              value={difficulty}
-              format={(d) => d[0].toUpperCase() + d.slice(1)}
-              onChange={setDifficulty}
-              hint={DIFFICULTY_HINT[difficulty]}
+              label="Pool"
+              options={POOLS}
+              value={pool}
+              format={(p) => POOL_LABEL[p]}
+              onChange={setPool}
+              hint={pool === 'weakest' ? 'Pokémon you drew in games but nobody guessed' : favouritesHint(favourites.length)}
             />
-            <PoolFilterFields
-              generations={filters.generations}
-              types={filters.types}
-              matching={getPokemonPool(difficulty, filters).length}
-              onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
-            />
+            {pool === 'weakest' ? (
+              <p className="text-xs text-center font-body font-semibold text-ink-muted" aria-live="polite">
+                {weakest.length === 0
+                  ? "Nothing to redraw yet — Pokémon you draw in a game and nobody guesses will show up here, most-missed first."
+                  : `${weakest.length} Pokémon to redraw, most-missed first`}
+              </p>
+            ) : (
+              <>
+                <OptionRow
+                  label="Difficulty"
+                  options={DIFFICULTIES}
+                  value={difficulty}
+                  format={(d) => d[0].toUpperCase() + d.slice(1)}
+                  onChange={setDifficulty}
+                  hint={DIFFICULTY_HINT[difficulty]}
+                />
+                <PoolFilterFields
+                  generations={filters.generations}
+                  types={filters.types}
+                  matching={matching}
+                  favourites={favouritesOnly ? favourites.length : undefined}
+                  onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
+                />
+              </>
+            )}
           </div>
         </div>
         <div className="flex gap-3 w-full">
           <PokeBallButton onClick={onExit} variant="gray" size="md" className="flex-1">
             Back
           </PokeBallButton>
-          <PokeBallButton onClick={nextSolo} variant="red" size="md" className="flex-1">
+          <PokeBallButton onClick={nextSolo} variant="red" size="md" className="flex-1" disabled={cannotStart}>
             Start
           </PokeBallButton>
         </div>

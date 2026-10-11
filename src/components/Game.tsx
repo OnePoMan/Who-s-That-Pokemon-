@@ -24,7 +24,9 @@ import { useSound } from '@/hooks/useSound';
 import { useRoom, versionMismatchNotice, type HelloMessage } from '@/hooks/useRoom';
 import { useNow, useWakeLock } from '@/hooks/useDeviceHelpers';
 import { vibrate } from '@/lib/prefs';
-import { isCorrectGuess, pickRandomPokemon, revealArtworkUrl } from '@/lib/pokedex';
+import { isCorrectGuess, revealArtworkUrl } from '@/lib/pokedex';
+import { pickForSettings } from '@/lib/pools';
+import { loadFavourites } from '@/lib/favourites';
 import { buildHint, hintStage, type Hint } from '@/lib/hints';
 import { composeComparison, safeFilename, shareOrDownload } from '@/lib/share';
 import { addDrawing } from '@/lib/collection';
@@ -216,7 +218,7 @@ export default function Game() {
   };
 
   const nextPokemon = (s: GameState, fresh = false) =>
-    pickRandomPokemon(s.settings.difficulty, fresh ? [] : s.usedPokemonIds, s.settings);
+    pickForSettings(s.settings.difficulty, fresh ? [] : s.usedPokemonIds, s.settings, loadFavourites());
 
   // Remote rounds skip the pass-the-phone handoff, so their memorize countdown starts at once.
   const beginRoundTimers = useCallback((mode: GameState['mode']) => {
@@ -689,7 +691,9 @@ export default function Game() {
       drawing.dataUrl,
     );
     const streak = Math.max(0, ...state.players.map((p) => guessStreak(state, p.id)));
-    updateProgress((st) => recordRound(st, { pokemonId: pokemon.id, outcome, quick: (drawing.leftFraction ?? 0) >= 2 / 3, streak, shiny: pokemon.shiny }));
+    // One phone draws every round; on several phones only the drawer's own phone did.
+    const drawnHere = state.mode !== 'remote' || getDrawer(state)?.id === myId;
+    updateProgress((st) => recordRound(st, { pokemonId: pokemon.id, outcome, quick: (drawing.leftFraction ?? 0) >= 2 / 3, streak, shiny: pokemon.shiny, drawnHere }));
   }, [state, drawings, myId, updateProgress]);
 
   const recordedGameRef = useRef(false);
@@ -720,7 +724,7 @@ export default function Game() {
     sound.startBgm();
     clearRoundStrokes();
     setDrawings({});
-    dispatch({ type: 'START_GAME', mode: 'local', players, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
+    dispatch({ type: 'START_GAME', mode: 'local', players, settings, pokemon: pickForSettings(settings.difficulty, [], settings, loadFavourites()) });
   };
 
   const startRemote = (settings: GameSettings, players: Player[]) => {
@@ -728,7 +732,7 @@ export default function Game() {
     sound.startBgm();
     clearRoundStrokes();
     setDrawings({});
-    dispatch({ type: 'START_GAME', mode: 'remote', players, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
+    dispatch({ type: 'START_GAME', mode: 'remote', players, settings, pokemon: pickForSettings(settings.difficulty, [], settings, loadFavourites()) });
     beginRoundTimers('remote');
   };
 

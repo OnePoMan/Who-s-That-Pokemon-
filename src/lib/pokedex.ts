@@ -52,6 +52,11 @@ export function revealArtworkUrl(pokemon: Pick<PokemonData, 'id' | 'artworkUrl' 
 /** Odds that a picked Pokémon is shiny: 1 in this many. */
 export const SHINY_ODDS = 64;
 
+/** Rolls the shiny odds once. */
+export function rollShiny(rng: () => number = Math.random): boolean {
+  return rng() < 1 / SHINY_ODDS;
+}
+
 const CRIES = 'https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest';
 
 export function cryUrl(id: number): string {
@@ -99,7 +104,7 @@ export function pickRandomPokemon(
   const available = pool.filter((id) => !excluded.has(id));
   const pickFrom = available.length > 0 ? available : pool;
   const id = pickFrom[Math.floor(Math.random() * pickFrom.length)];
-  return getPokemon(id, Math.random() < 1 / SHINY_ODDS)!;
+  return getPokemon(id, rollShiny())!;
 }
 
 /**
