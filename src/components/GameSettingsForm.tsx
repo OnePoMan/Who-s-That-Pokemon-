@@ -2,13 +2,16 @@
 
 import {
   DIFFICULTIES,
+  MIN_TEAM_PLAYERS,
   MEMORIZE_OPTIONS,
   TIMER_OPTIONS,
   TURNS_OPTIONS,
   WIN_SCORE_OPTIONS,
   type GameSettings,
 } from '@/lib/game-state';
-import { GENERATIONS, REGIONS, TYPES, getPokemonPool } from '@/lib/pokedex';
+import { useFavourites } from '@/hooks/useFavourites';
+import { GENERATIONS, REGIONS, TYPES } from '@/lib/pokedex';
+import { getCustomPool } from '@/lib/pools';
 import TypeBadge from './TypeBadge';
 
 interface GameSettingsFormProps {
@@ -25,7 +28,8 @@ export const DIFFICULTY_HINT = {
 
 export default function GameSettingsForm({ settings, onChange, playerCount }: GameSettingsFormProps) {
   const set = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => onChange({ ...settings, [key]: value });
-  const matching = getPokemonPool(settings.difficulty, settings).length;
+  const { favourites } = useFavourites();
+  const matching = getCustomPool(settings.difficulty, settings, favourites).length;
   const party = playerCount > 2;
 
   return (
@@ -40,10 +44,20 @@ export default function GameSettingsForm({ settings, onChange, playerCount }: Ga
           hint={DIFFICULTY_HINT[settings.difficulty]}
         />
 
+        <OptionRow
+          label="Pool"
+          options={[false, true] as const}
+          value={settings.favouritesOnly}
+          format={(b) => (b ? 'Favourites only' : 'All matching')}
+          onChange={(v) => set('favouritesOnly', v)}
+          hint={favouritesHint(favourites.length)}
+        />
+
         <PoolFilterFields
           generations={settings.generations}
           types={settings.types}
           matching={matching}
+          favourites={settings.favouritesOnly ? favourites.length : undefined}
           onChange={(patch) => onChange({ ...settings, ...patch })}
         />
 
@@ -56,10 +70,20 @@ export default function GameSettingsForm({ settings, onChange, playerCount }: Ga
             value={settings.turnsEach}
             format={(n) => `${n}×`}
             onChange={(v) => set('turnsEach', v)}
-            hint={`${playerCount * settings.turnsEach} rounds · highest score wins`}
+            hint={`${playerCount * settings.turnsEach} rounds · highest ${settings.teams && playerCount >= MIN_TEAM_PLAYERS ? 'team ' : ''}score wins`}
           />
         ) : (
           <OptionRow label="First to" options={WIN_SCORE_OPTIONS} value={settings.winScore} format={(n) => `${n} pts`} onChange={(v) => set('winScore', v)} />
+        )}
+        {playerCount >= MIN_TEAM_PLAYERS && (
+          <OptionRow
+            label="Teams"
+            options={[false, true] as const}
+            value={settings.teams}
+            format={(b) => (b ? 'Red vs Blue' : 'Solo')}
+            onChange={(v) => set('teams', v)}
+            hint={settings.teams ? 'Teams take turns drawing. A correct guess scores a point for the guesser\'s team' : undefined}
+          />
         )}
         <OptionRow
           label="While memorizing, show"
@@ -79,6 +103,11 @@ export default function GameSettingsForm({ settings, onChange, playerCount }: Ga
       </div>
     </div>
   );
+}
+
+/** Shown under the Pool choice; stars are added in the Pokédex. */
+export function favouritesHint(count: number): string {
+  return count === 0 ? 'Star Pokémon in the Pokédex to build your own pool' : `${count} starred in your Pokédex`;
 }
 
 export function OptionRow<T extends string | number | boolean>({
@@ -124,11 +153,14 @@ export function PoolFilterFields({
   generations,
   types,
   matching,
+  favourites,
   onChange,
 }: {
   generations: number[];
   types: string[];
   matching: number;
+  /** How many Pokémon are starred, when the pool is limited to favourites (otherwise undefined). */
+  favourites?: number;
   onChange: (patch: { generations?: number[]; types?: string[] }) => void;
 }) {
   return (
@@ -168,7 +200,11 @@ export function PoolFilterFields({
       </fieldset>
 
       <p className={`text-xs text-center font-body font-semibold ${matching === 0 ? 'text-accent-red' : 'text-ink-muted'}`} aria-live="polite">
-        {matching === 0
+        {matching === 0 && favourites !== undefined
+          ? favourites === 0
+            ? "You haven't starred any Pokémon yet — star some in the Pokédex."
+            : 'None of your favourites match these filters — loosen them or use all matching.'
+          : matching === 0
           ? 'No Pokémon match these filters — any Pokémon from this difficulty will be used.'
           : `${matching} Pokémon match${generations.length || types.length ? '' : ' (no filters)'}`}
         {(generations.length > 0 || types.length > 0) && (

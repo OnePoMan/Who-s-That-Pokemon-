@@ -4,13 +4,17 @@ import { useEffect, useState } from 'react';
 import DrawingCanvas from './DrawingCanvas';
 import HintBar from './HintBar';
 import Timer from './Timer';
+import { revealArtworkUrl } from '@/lib/pokedex';
 import RevealStage from './RevealStage';
 import PokeBallButton from './PokeBallButton';
 import { AvatarIcon } from './AvatarPicker';
 import { ScoreChip, type SavedDrawing } from './RevealPhase';
-import { getDrawer, getWinners, roundsInGame, type GameState } from '@/lib/game-state';
+import { TeamRosters, TeamScores } from './TeamPicker';
+import { TEAM_NAMES, getDrawer, getTeamScores, getWinners, getWinningTeams, isSteal, roundsInGame, teamsActive, type GameState } from '@/lib/game-state';
 import type { CanvasManager } from '@/lib/canvas-engine';
 import type { Hint } from '@/lib/hints';
+import { useNameLanguage } from '@/hooks/useNameData';
+import { localizedName } from '@/lib/pokemon-names';
 
 interface TVViewProps {
   state: GameState;
@@ -32,6 +36,8 @@ interface TVViewProps {
 export default function TVView({ state, code, remainingMs, hint, drawings, streaks, canvasManagerRef, onCanvasReady, onLeave, connectionLost }: TVViewProps) {
   const drawer = getDrawer(state);
   const totalRounds = roundsInGame(state);
+  const teamScores = teamsActive(state) ? getTeamScores(state) : null;
+  const winningTeams = getWinningTeams(state);
   const joinUrl = code && typeof window !== 'undefined' ? `${window.location.host}/?room=${code}` : '';
 
   return (
@@ -74,11 +80,15 @@ export default function TVView({ state, code, remainingMs, hint, drawings, strea
               🏆
             </p>
             <p className="font-pixel text-xl text-ink leading-relaxed">
-              {getWinners(state)
-                .map((w) => w.nickname)
-                .join(' & ')}{' '}
-              {getWinners(state).length > 1 ? 'win!' : 'wins!'}
+              {teamScores
+                ? winningTeams.length === 1
+                  ? `${TEAM_NAMES[winningTeams[0]]} wins!`
+                  : 'Tie! Both teams win!'
+                : `${getWinners(state)
+                    .map((w) => w.nickname)
+                    .join(' & ')} ${getWinners(state).length > 1 ? 'win!' : 'wins!'}`}
             </p>
+            {teamScores && <TeamRosters players={state.players} />}
           </div>
         )}
       </section>
@@ -97,6 +107,7 @@ export default function TVView({ state, code, remainingMs, hint, drawings, strea
             {totalRounds ? ` of ${totalRounds}` : ` · first to ${state.settings.winScore}`}
           </p>
         )}
+        {teamScores && <TeamScores scores={teamScores} highlight={winningTeams} />}
         <ul className="space-y-2" aria-label="Scores">
           {[...state.players]
             .sort((a, b) => b.score - a.score)
@@ -126,14 +137,21 @@ function TVReveal({ state, drawing }: { state: GameState; drawing: SavedDrawing 
     return () => clearTimeout(id);
   }, []);
   const pokemon = state.currentPokemon!;
+  const { lang, data } = useNameLanguage();
+  const localName = data && lang !== 'en' ? localizedName(pokemon.id, lang, data) : null;
   const solver = state.players.find((p) => p.id === state.roundResults.at(-1)?.solvedBy);
+  const last = state.roundResults.at(-1);
+  const steal = teamsActive(state) && !!last && isSteal(state, last);
   const headline =
-    state.outcome === 'correct' ? (solver ? `${solver.nickname} got it!` : 'Correct!') : state.outcome === 'skipped' ? 'Skipped' : "Time's up!";
+    state.outcome === 'correct' ? (solver ? `${solver.nickname} got it!${steal ? ' Steal!' : ''}` : 'Correct!') : state.outcome === 'skipped' ? 'Skipped' : "Time's up!";
   const box = 'w-[min(30vw,60vh,520px)] aspect-square';
   return (
     <div className="flex flex-col items-center gap-4">
       <p className="font-pixel text-xl text-ink leading-relaxed">{headline}</p>
-      <p className="font-pixel text-lg text-accent h-8">{revealed ? `It's ${pokemon.name}!` : "Who's that Pokémon?"}</p>
+      <p className={`font-pixel text-lg text-accent ${localName ? 'min-h-14' : 'h-8'}`}>
+        {revealed ? `It's ${pokemon.name}!` : "Who's that Pokémon?"}
+        {revealed && localName && <span className="block font-body text-base text-ink-muted">{localName}</span>}
+      </p>
       <div className="flex justify-center gap-6">
         <div className={`${box} rounded-xl overflow-hidden border-4 border-line bg-white`}>
           {drawing && (
@@ -141,7 +159,7 @@ function TVReveal({ state, drawing }: { state: GameState; drawing: SavedDrawing 
             <img src={drawing.dataUrl} alt="The drawing" className="w-full h-full object-contain" />
           )}
         </div>
-        <RevealStage imageUrl={pokemon.artworkUrl} revealed={revealed} name={pokemon.name} className={box} />
+        <RevealStage imageUrl={revealArtworkUrl(pokemon)} revealed={revealed} shiny={pokemon.shiny} name={pokemon.name} className={box} />
       </div>
     </div>
   );

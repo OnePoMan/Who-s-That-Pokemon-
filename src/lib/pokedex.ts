@@ -44,6 +44,19 @@ export function artworkUrl(id: number): string {
   return `${SPRITES}/other/official-artwork/${id}.png`;
 }
 
+/** The artwork shown at the reveal: the shiny one for a shiny Pokémon. */
+export function revealArtworkUrl(pokemon: Pick<PokemonData, 'id' | 'artworkUrl' | 'shiny'>): string {
+  return pokemon.shiny ? `${SPRITES}/other/official-artwork/shiny/${pokemon.id}.png` : pokemon.artworkUrl;
+}
+
+/** Odds that a picked Pokémon is shiny: 1 in this many. */
+export const SHINY_ODDS = 64;
+
+/** Rolls the shiny odds once. */
+export function rollShiny(rng: () => number = Math.random): boolean {
+  return rng() < 1 / SHINY_ODDS;
+}
+
 const CRIES = 'https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest';
 
 export function cryUrl(id: number): string {
@@ -57,10 +70,10 @@ export function speciesOf(id: number): number {
   return speciesByForm.get(id) ?? id;
 }
 
-export function getPokemon(id: number): PokemonData | null {
+export function getPokemon(id: number, shiny = false): PokemonData | null {
   const name = nameById.get(id);
   if (!name) return null;
-  return { id, name, artworkUrl: artworkUrl(id) };
+  return shiny ? { id, name, artworkUrl: artworkUrl(id), shiny: true } : { id, name, artworkUrl: artworkUrl(id) };
 }
 
 const HARD_POOL: readonly number[] = [...species.map(([id]) => id), ...forms.map(([id]) => id)];
@@ -91,21 +104,27 @@ export function pickRandomPokemon(
   const available = pool.filter((id) => !excluded.has(id));
   const pickFrom = available.length > 0 ? available : pool;
   const id = pickFrom[Math.floor(Math.random() * pickFrom.length)];
-  return getPokemon(id)!;
+  return getPokemon(id, rollShiny())!;
 }
 
 /**
- * Folds a name to a comparable key: case, accents, gender symbols and punctuation are ignored,
- * so "mr mime", "Mr. Mime" and "MR-MIME" all match, as do "flabebe" and "Flabébé".
+ * Folds a name to a comparable key: case, accents, gender symbols, punctuation and width are
+ * ignored, so "mr mime", "Mr. Mime" and "MR-MIME" all match, as do "flabebe" and "Flabébé".
+ * It works for every supported language: full-width letters fold to half-width (NFKC), katakana
+ * folds to hiragana (ピカチュウ = ぴかちゅう), and Hangul and Han characters are kept.
  */
 export function normalizeName(name: string): string {
   return name
+    .normalize('NFKC')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFC')
     .replace(/♀/g, 'f')
     .replace(/♂/g, 'm')
+    .replace(/ß/g, 'ss')
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
+    .replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
 export function isCorrectGuess(guess: string, answer: string): boolean {

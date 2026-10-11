@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanText, fromWire, generateRoomCode, normalizeRoomCode, toWire, validateMessage, ROOM_ALPHABET } from './protocol';
+import { PROTOCOL_VERSION, cleanText, fromWire, generateRoomCode, normalizeRoomCode, toWire, validateMessage, ROOM_ALPHABET } from './protocol';
 import { DEFAULT_SETTINGS, initialGameState, type GameState } from '../game-state';
 import { safeFilename } from '../share';
 
@@ -49,6 +49,15 @@ describe('wire state', () => {
     const msg = validateMessage({ t: 'state', state: toWire(state, 'p1', 10_000) });
     expect(msg?.t).toBe('state');
   });
+
+  it('carries the favourites-only setting, defaulting to off for older hosts', () => {
+    const on = validateMessage({ t: 'state', state: toWire({ ...state, settings: { ...DEFAULT_SETTINGS, favouritesOnly: true } }, 'p1', 10_000) });
+    expect(on?.t === 'state' && on.state.settings.favouritesOnly).toBe(true);
+    const legacy: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+    delete legacy.favouritesOnly;
+    const old = validateMessage({ t: 'state', state: { ...toWire(state, 'p1', 10_000), settings: legacy } });
+    expect(old?.t === 'state' && old.state.settings.favouritesOnly).toBe(false);
+  });
 });
 
 describe('validateMessage', () => {
@@ -94,6 +103,28 @@ describe('validateMessage', () => {
     });
   });
 
+  it('accepts a boolean shiny flag but still rebuilds the artwork URL locally', () => {
+    const shiny = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, shiny: true } }, 'p1', 0);
+    const msg = validateMessage({ t: 'state', state: shiny });
+    expect(msg?.t === 'state' && msg.state.currentPokemon).toEqual({
+      id: 25,
+      name: 'Pikachu',
+      artworkUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png',
+      shiny: true,
+    });
+    const plain = validateMessage({ t: 'state', state: toWire(state, 'p1', 0) });
+    expect(plain?.t === 'state' && plain.state.currentPokemon?.shiny).toBeUndefined();
+    const nulled = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, shiny: null as unknown as boolean } }, 'p1', 0);
+    expect(validateMessage({ t: 'state', state: nulled })).not.toBeNull();
+  });
+
+  it('rejects a non-boolean shiny flag', () => {
+    for (const shiny of ['true', 1, {}, 'https://evil.example/x.png']) {
+      const bad = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, shiny: shiny as unknown as boolean } }, 'p1', 0);
+      expect(validateMessage({ t: 'state', state: bad })).toBeNull();
+    }
+  });
+
   it('rejects unknown Pokémon IDs', () => {
     const bad = toWire({ ...state, currentPokemon: { ...state.currentPokemon!, id: 99999 } }, 'p1', 0);
     expect(validateMessage({ t: 'state', state: bad })).toBeNull();
@@ -128,6 +159,75 @@ describe('rooms with several phones', () => {
 
   it('hides the answer from spectators too', () => {
     expect(toWire(state, 'spectator', 0).currentPokemon).toBeNull();
+  });
+});
+
+describe('team mode on the wire', () => {
+  const teamPlayers = (['red', 'blue', 'red', 'blue'] as const).map((team, i) => ({ id: `p${i + 1}`, nickname: `P${i + 1}`, avatarId: i + 1, score: 0, team }));
+  const teamState: GameState = { ...state, players: teamPlayers, settings: { ...DEFAULT_SETTINGS, teams: true } };
+  const settingsOf = (wireSettings: unknown) => {
+    const msg = validateMessage({ t: 'state', state: { ...toWire(teamState, 'p1', 0), settings: wireSettings } });
+    return msg?.t === 'state' ? msg.state.settings : null;
+  };
+
+  it('round-trips the teams setting and each player\'s team', () => {
+    const msg = validateMessage({ t: 'state', state: toWire(teamState, 'p1', 0) });
+    expect(msg?.t === 'state' && msg.state.settings.teams).toBe(true);
+    expect(msg?.t === 'state' && msg.state.players.map((p) => p.team)).toEqual(['red', 'blue', 'red', 'blue']);
+  });
+
+  it('treats settings without the field (older hosts) as teams off', () => {
+    const old: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+    delete old.teams;
+    expect(settingsOf(old)?.teams).toBe(false);
+    expect(settingsOf({ ...old, teams: null })?.teams).toBe(false);
+  });
+
+  it('rejects a non-boolean teams setting or an unknown team', () => {
+    expect(settingsOf({ ...DEFAULT_SETTINGS, teams: 'yes' })).toBeNull();
+    const bad = toWire({ ...teamState, players: teamPlayers.map((p, i) => (i === 0 ? { ...p, team: 'green' as never } : p)) }, 'p1', 0);
+    expect(validateMessage({ t: 'state', state: bad })).toBeNull();
+  });
+
+  describe('lobby team assignments', () => {
+    const lobby = (players: unknown[]) => validateMessage({ t: 'lobby', players, youId: 'p1', hostToken: 't', spectators: 0 });
+
+    it('keeps the host\'s teams', () => {
+      const msg = lobby(teamPlayers);
+      expect(msg?.t === 'lobby' && msg.players.map((p) => p.team)).toEqual(['red', 'blue', 'red', 'blue']);
+    });
+
+    it('accepts a roster with no teams, including nulls from the binary encoding', () => {
+      const msg = lobby(teamPlayers.map((p) => ({ ...p, team: null })));
+      expect(msg?.t === 'lobby' && msg.players.every((p) => p.team === undefined)).toBe(true);
+    });
+
+    it('rejects partial assignments, unknown teams, duplicate ids and too-small rooms', () => {
+      expect(lobby([...teamPlayers.slice(0, 3), { ...teamPlayers[3], team: null }])).toBeNull();
+      expect(lobby(teamPlayers.map((p, i) => (i === 0 ? { ...p, team: 'green' } : p)))).toBeNull();
+      expect(lobby(teamPlayers.map((p, i) => (i === 3 ? { ...p, id: 'p1' } : p)))).toBeNull();
+      expect(lobby(teamPlayers.slice(0, 3))).toBeNull();
+      expect(lobby([...teamPlayers, ...teamPlayers.map((p) => ({ ...p, id: p.id + 'x' })), { ...teamPlayers[0], id: 'p9' }])).toBeNull();
+    });
+  });
+});
+
+describe('protocol version', () => {
+  it('is 4 or later, so phones from before team lobbies and shiny reveals are turned away', () => {
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(4);
+  });
+
+  it('carries the version in hello and, optionally, in reject', () => {
+    const hello = { t: 'hello', v: 3, clientId: 'c', role: 'player', name: 'Ash', avatarId: 1 };
+    expect(validateMessage(hello)).toMatchObject({ t: 'hello', v: 3 });
+    expect(validateMessage({ t: 'reject', reason: 'version' })).toEqual({ t: 'reject', reason: 'version' });
+    expect(validateMessage({ t: 'reject', reason: 'version', hostVersion: PROTOCOL_VERSION })).toEqual({
+      t: 'reject',
+      reason: 'version',
+      hostVersion: PROTOCOL_VERSION,
+    });
+    expect(validateMessage({ t: 'reject', reason: 'version', hostVersion: 'new' })).toBeNull();
+    expect(validateMessage({ t: 'reject', reason: 'nope' })).toBeNull();
   });
 });
 

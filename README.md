@@ -6,7 +6,7 @@ A drawing and guessing game for 2–8 players. One player gets a few seconds to 
 
 **One phone.** Hand the phone to the drawer; everyone else looks away. The drawer taps *Show me*, memorizes the Pokémon, then starts drawing. A banner tells the guessers to look; they shout guesses or type one into the guess box under the canvas (a name dropdown appears after the first letter, and a correct pick ends the round). *…got it!* and *Skip* are there for shouted guesses. Everyone takes a turn drawing.
 
-**Several phones.** One player taps *Play on several phones → Create a room* and shares the six-character code (or the invite link, which fills the code in); up to 8 players join with it. The drawer's strokes appear live on everyone's phone; guessers type a guess and pick a name from the dropdown, so spelling never decides the round, and can send quick emoji reactions. The drawer can also confirm a guess (choosing who got it) or give up. The room code stays in the top bar on every phone (tap it to share the invite). A player who drops out keeps their seat: they rejoin with the same code — using the same name if they're on a new browser or closed the tab — and carry on with their score. New players can't join once a game has started.
+**Several phones.** One player taps *Play on several phones → Create a room* and shares the six-character code (or the invite link, which fills the code in); up to 8 players join with it. The drawer's strokes appear live on everyone's phone; guessers type a guess and pick a name from the dropdown, so spelling never decides the round, and can send quick emoji reactions. The drawer can also confirm a guess (choosing who got it) or give up. The room code stays in the top bar on every phone (tap it to share the invite). A player who drops out keeps their seat: they rejoin with the same code — using the same name if they're on a new browser or closed the tab — and carry on with their score. New players can't join once a game has started. A phone running a different version of the game than the room is turned away with a message to reload the page.
 
 **TV / big screen.** Open the site on a laptop or smart-TV browser, enter the room code and choose *Watch on this screen*. It shows the live drawing, timer, hints, guesses, reactions, reveal and scores for everyone in the room, and never receives the answer early. Up to 4 screens can watch.
 
@@ -14,13 +14,19 @@ A drawing and guessing game for 2–8 players. One player gets a few seconds to 
 
 **Solo practice.** Pick a difficulty and filters, then draw at your own pace with no timer and compare with the official artwork.
 
-**Pokédex, stats and badges.** Every drawing made or watched on the phone — in games, the daily and solo practice — is saved to its Pokédex (all 1,175 Pokémon and forms, filterable by generation and type), where you can see, save, share or delete each one. The Stats tab tracks games, rounds guessed, streaks, most-drawn Pokémon and more, and there are 17 badges to earn.
+**Favourites and weakest practice.** Tap the star on a drawn Pokémon in the Pokédex to favourite it (the Favourites chip filters the grid). Battle settings and solo practice then offer *Pool: Favourites only*, which picks only from your starred Pokémon that also match the difficulty, generation and type filters (in multi-phone play only the host's favourites count). Solo practice also has *My weakest*: it redraws Pokémon you drew in games that nobody guessed, most-missed first with some randomness.
 
-After each round the answer is revealed anime-style — a silhouette over a blue burst that flashes into the official artwork, with the Pokémon's cry — with a timelapse replay and a share card. Every drawing from the session is in the gallery (settings menu, or at the end of the game) to download or share.
+**Pokédex, stats and badges.** Every drawing made or watched on the phone — in games, the daily and solo practice — is saved to its Pokédex (all 1,175 Pokémon and forms, filterable by generation and type), where you can see, save, share or delete each one. The Stats tab tracks games, rounds guessed, streaks, most-drawn Pokémon and more, and there are 18 badges to earn.
+
+After each round the answer is revealed anime-style — a silhouette over a blue burst that flashes into the official artwork, with the Pokémon's cry — with a timelapse replay and a share card. Now and then (1 in 64) the Pokémon is a **shiny**: the drawer still memorizes the normal colours, but the reveal flashes into the shiny artwork with a sparkling "Shiny!" label, and the Pokédex marks that drawing. Every drawing from the session is in the gallery (settings menu, or at the end of the game) to download or share.
 
 **Scoring.** With two players, the guesser scores a point for a correct guess and the first to 3/5/7 points wins. With three or more, the first player to guess and the drawer each score a point (on a shared phone you tap who got it), everyone draws the same number of times (1–3 turns each), and the highest score wins; ties share the win.
 
+**Team mode** (optional setting, 4 or more players). Players split into Team Red and Team Blue, auto-balanced by alternating; in the lobby the host can tap a player to swap their team (everyone else's phone and any TV screen shows the teams live, read-only), and each team needs at least 2 players. Teams take turns drawing (Red, Blue, Red, …) and everyone still draws the chosen number of times (with uneven teams the larger team draws back to back at the end). A correct guess scores 1 point for the *guesser's* team: the drawer's team if a teammate guessed it, or the other team if they got it first (a "steal"). Individual scores are still tracked for stats. The highest team score wins; a tie is a shared win.
+
 **Drawing tools:** pen (pressure-sensitive with a stylus), eraser, fill, line, rectangle, circle, eyedropper, any custom colour (recent colours are remembered), four brush sizes, undo/redo and clear. Pinch with two fingers (or Ctrl/⌘ + scroll) to zoom in for detail; guessers and the TV screen can zoom too.
+
+**Multilingual guessing.** Guesses in English or any of Japanese (katakana and rōmaji), French, German, Spanish, Italian, Korean and Chinese (simplified and traditional) are always accepted; the *Name language* device setting adds that language to the guess suggestions and shows the name under the English one on the reveal. Hints stay English.
 
 **Hints** (on by default): letter blanks from the start, the Pokémon's type and generation at the halfway mark, and its first letter with 15 seconds left.
 
@@ -34,16 +40,18 @@ Difficulty: *Easy* is ~160 well-known Pokémon, *Medium* ~370, *Hard* all 1,025 
 npm install
 npm run dev          # http://localhost:3000
 npm test             # unit tests (Vitest)
+npm run test:e2e     # Playwright smoke tests against a production build (first: npx playwright install chromium)
 npm run lint
 npm run typecheck
 npm run build
 ```
 
-Requires Node 20.9+. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests, build and `npm audit` on every pull request.
+Requires Node 20.9+. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests, build, Playwright end-to-end tests and `npm audit` of production dependencies on every pull request.
 
 ### Data and assets
 
 - `src/data/pokemon-index.json` — every species' English name and every included alternate form, with IDs verified against PokéAPI. Regenerate with `npm run generate:pokemon` (network required).
+- `src/data/pokemon-names-i18n.json` — localized species names (ja, ja-roomaji, fr, de, es, it, ko, zh-Hans, zh-Hant) from PokéAPI's [`pokemon_species_names.csv`](https://github.com/PokeAPI/pokeapi/blob/master/data/v2/csv/pokemon_species_names.csv). Regenerate with `npm run generate:names` (network required). A name equal to the English one is stored as `""`; forms are not stored but derived by swapping the species name inside the English label (`Mega Charizard X` becomes `Mega リザードン X`). It is a separate lazy-loaded chunk, fetched only when a non-English language is chosen or a room host first judges a guess that misses the English name.
 - `src/data/pokemon-difficulty.ts` — the curated Easy and Medium lists.
 - `public/icons`, `src/app/icon.png`, `src/app/apple-icon.png` — generated by `npm run generate:icons`.
 - Official artwork is loaded at play time from the [PokeAPI sprites](https://github.com/PokeAPI/sprites) repository and cached by the service worker; cries stream from the [PokeAPI cries](https://github.com/PokeAPI/cries) repository.

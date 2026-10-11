@@ -5,7 +5,8 @@ import PokeBallButton from './PokeBallButton';
 import PokemonSilhouette from './PokemonSilhouette';
 import ConfirmDialog from './ConfirmDialog';
 import TypeBadge from './TypeBadge';
-import { DEX_ORDER, GENERATIONS, REGIONS, TYPES, artworkUrl, type DexEntryInfo } from '@/lib/pokedex';
+import { useFavourites } from '@/hooks/useFavourites';
+import { DEX_ORDER, GENERATIONS, REGIONS, TYPES, artworkUrl, revealArtworkUrl, type DexEntryInfo } from '@/lib/pokedex';
 import { clearDrawings, deleteDrawing, getDrawingImage, listDrawings, type CollectedDrawing } from '@/lib/collection';
 import { ACHIEVEMENTS, currentDailyStreak, isUnlocked, mostDrawn, type Stats } from '@/lib/stats';
 import { dateKey } from '@/lib/daily';
@@ -111,6 +112,9 @@ function DexGrid({
   const [generation, setGeneration] = useState(0);
   const [type, setType] = useState('');
   const [drawnOnly, setDrawnOnly] = useState(false);
+  const [favouritesOnly, setFavouritesOnly] = useState(false);
+  const { favourites, toggle } = useFavourites();
+  const starred = useMemo(() => new Set(favourites), [favourites]);
   const [open, setOpen] = useState<DexEntryInfo | null>(null);
 
   // Newest drawing of each Pokémon, for its thumbnail.
@@ -122,7 +126,7 @@ function DexGrid({
   const discovered = useMemo(() => new Set([...stats.discovered, ...latest.keys()]), [stats.discovered, latest]);
 
   const entries = DEX_ORDER.filter(
-    (e) => (!generation || e.generation === generation) && (!type || e.types.includes(type)) && (!drawnOnly || discovered.has(e.id)),
+    (e) => (!generation || e.generation === generation) && (!type || e.types.includes(type)) && (!drawnOnly || discovered.has(e.id)) && (!favouritesOnly || starred.has(e.id)),
   );
   const shownDiscovered = entries.filter((e) => discovered.has(e.id)).length;
 
@@ -157,6 +161,14 @@ function DexGrid({
               <input type="checkbox" checked={drawnOnly} onChange={(e) => setDrawnOnly(e.target.checked)} className="w-4 h-4 accent-pokemon-red" />
               Drawn only
             </label>
+            <button
+              type="button"
+              aria-pressed={favouritesOnly}
+              onClick={() => setFavouritesOnly((v) => !v)}
+              className={`pokemon-toggle px-2.5 py-1 text-xs ${favouritesOnly ? 'active' : ''}`}
+            >
+              ★ Favourites ({favourites.length})
+            </button>
           </div>
           {(generation > 0 || type) && (
             <p className="text-center text-xs font-body text-ink-muted">
@@ -168,7 +180,11 @@ function DexGrid({
 
       {entries.length === 0 ? (
         <p className="text-center text-sm font-body text-ink-muted py-6">
-          {drawnOnly ? 'Nothing drawn here yet — play a round or try solo practice!' : 'No Pokémon match.'}
+          {favouritesOnly && starred.size === 0
+            ? 'No favourites yet — open a Pokémon you have drawn and tap its star.'
+            : drawnOnly
+              ? 'Nothing drawn here yet — play a round or try solo practice!'
+              : 'No Pokémon match.'}
         </p>
       ) : (
         <ul className="grid grid-cols-3 sm:grid-cols-5 gap-2" aria-label="Pokédex">
@@ -189,7 +205,13 @@ function DexGrid({
                   </div>
                   <div className="px-1.5 py-1 font-body leading-tight">
                     <span className="block text-[10px] text-ink-muted">#{String(e.number).padStart(4, '0')}</span>
-                    <span className="block text-[11px] font-bold text-ink truncate">{seen ? e.name : '???'}</span>
+                    <span className="block text-[11px] font-bold text-ink truncate">
+                      {starred.has(e.id) && <span className="text-pokemon-yellow-dark" aria-label="Favourite">★ </span>}
+                      {seen ? e.name : '???'}
+                      {mine?.some((d) => d.shiny) && (
+                        <span title="Shiny" role="img" aria-label="Shiny"> ✨</span>
+                      )}
+                    </span>
                   </div>
                 </button>
               </li>
@@ -201,6 +223,8 @@ function DexGrid({
       {open && (
         <DexDetail
           entry={open}
+          starred={starred.has(open.id)}
+          onToggleStar={() => toggle(open.id)}
           drawings={latest.get(open.id) ?? []}
           onClose={() => setOpen(null)}
           onDeleted={onChanged}
@@ -261,12 +285,16 @@ function Thumb({ id, alt }: { id: number; alt: string }) {
 
 function DexDetail({
   entry,
+  starred,
+  onToggleStar,
   drawings,
   onClose,
   onDeleted,
   onNotice,
 }: {
   entry: DexEntryInfo;
+  starred: boolean;
+  onToggleStar: () => void;
   drawings: CollectedDrawing[];
   onClose: () => void;
   onDeleted: () => void;
@@ -302,9 +330,20 @@ function DexDetail({
           <h2 id="dex-detail-title" className="font-pixel text-[11px] text-white leading-relaxed">
             #{String(entry.number).padStart(4, '0')} {entry.name}
           </h2>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold">
-            ✕
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              aria-pressed={starred}
+              onClick={onToggleStar}
+              aria-label={starred ? `Remove ${entry.name} from favourites` : `Add ${entry.name} to favourites`}
+              className={`w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 font-bold ${starred ? 'text-pokemon-yellow' : 'text-white'}`}
+            >
+              {starred ? '★' : '☆'}
+            </button>
+            <button ref={closeRef} type="button" onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold">
+              ✕
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
           <div className="flex items-center gap-3">
@@ -333,6 +372,7 @@ function DexDetail({
                   <p className="text-[10px] text-ink-muted">
                     {new Date(d.drawnAt).toLocaleDateString()} · {SOURCE_LABEL[d.source]}
                     {OUTCOME_LABEL[d.outcome] && ` · ${OUTCOME_LABEL[d.outcome]}`}
+                    {d.shiny && ' · ✨ Shiny'}
                   </p>
                   <div className="flex gap-1">
                     <button type="button" onClick={() => void withImage(d, (url) => downloadUrl(url, filename(d)))} className="flex-1 py-1 rounded-lg text-[10px] font-bold text-accent bg-blue-50 hover:bg-blue-100 border border-pokemon-blue/20">
@@ -343,7 +383,7 @@ function DexDetail({
                       onClick={() =>
                         void withImage(d, async (url) => {
                           try {
-                            const blob = await composeComparison(url, artworkUrl(entry.id), `${d.artist} drew ${entry.name}`);
+                            const blob = await composeComparison(url, revealArtworkUrl({ id: entry.id, artworkUrl: artworkUrl(entry.id), shiny: d.shiny }), `${d.artist} drew ${entry.name}`);
                             if ((await shareOrDownload(blob, filename(d), `${d.artist} drew ${entry.name} in Who's That Pokémon?`)) === 'downloaded') onNotice('Image saved to your downloads.');
                           } catch {
                             onNotice('Could not create the image.');

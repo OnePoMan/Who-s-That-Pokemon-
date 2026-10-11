@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import Lobby from './Lobby';
 import RemoteLobby from './RemoteLobby';
+import { withTeams } from './TeamPicker';
 import MemorizePhase from './MemorizePhase';
 import DrawingPhase from './DrawingPhase';
 import RevealPhase, { type SavedDrawing } from './RevealPhase';
@@ -18,12 +19,16 @@ import SoloPlay from './SoloPlay';
 import PokedexScreen from './PokedexScreen';
 import HowToPlay, { hasSeenGuide } from './HowToPlay';
 import { usePrefs } from '@/hooks/usePrefs';
+import { NameLanguageContext, useNameData } from '@/hooks/useNameData';
 import { useProgress } from '@/hooks/useProgress';
 import { useSound } from '@/hooks/useSound';
-import { useRoom, type HelloMessage } from '@/hooks/useRoom';
+import { useRoom, versionMismatchNotice, type HelloMessage } from '@/hooks/useRoom';
 import { useNow, useWakeLock } from '@/hooks/useDeviceHelpers';
 import { vibrate } from '@/lib/prefs';
-import { isCorrectGuess, pickRandomPokemon } from '@/lib/pokedex';
+import { isCorrectGuess, revealArtworkUrl } from '@/lib/pokedex';
+import { getLoadedNameData, isCorrectGuessAnyLanguage, loadNameData } from '@/lib/pokemon-names';
+import { pickForSettings } from '@/lib/pools';
+import { loadFavourites } from '@/lib/favourites';
 import { buildHint, hintStage, type Hint } from '@/lib/hints';
 import { composeComparison, safeFilename, shareOrDownload } from '@/lib/share';
 import { addDrawing } from '@/lib/collection';
@@ -47,15 +52,22 @@ import {
   gameReducer,
   getDrawer,
   getGuessers,
+  getTeamScores,
   getWinners,
+  getWinningTeams,
   guessStreak,
   initialGameState,
   isGameFinished,
   isParty,
+  isSteal,
+  MIN_TEAM_PLAYERS,
+  teamsActive,
+  TEAM_NAMES,
   type GameSettings,
   type GameState,
   type Player,
   type RoundOutcome,
+  type Team,
 } from '@/lib/game-state';
 
 const HOST_ID = 'p1';
@@ -63,6 +75,21 @@ const HOST_ID = 'p1';
 // Faster than anyone types, slow enough that a modified client can't try every name.
 const GUESS_COOLDOWN_MS = 1200;
 const MAX_GUESSES_PER_ROUND = 30;
+
+/**
+ * Judges a guess in English or any supported language. The English check is synchronous; the
+ * localized names are fetched on the first miss (only the host judges, so a room with an
+ * English-only host and a Japanese guesser still works), then answered synchronously.
+ */
+function judgeGuess(text: string, pokemon: { id: number; name: string }, done: (correct: boolean) => void) {
+  if (isCorrectGuess(text, pokemon.name)) return done(true);
+  const data = getLoadedNameData();
+  if (data) return done(isCorrectGuessAnyLanguage(text, pokemon, data));
+  loadNameData().then(
+    (d) => done(isCorrectGuessAnyLanguage(text, pokemon, d)),
+    () => done(false),
+  );
+}
 // Limits on what another phone can make this one redraw.
 const MAX_HISTORY_EVENTS_PER_SECOND = 4; // undo / redo / clear; the drawer's buttons match this pace
 const MAX_FILLS_PER_SECOND = 4; // each fill scans the whole canvas once
@@ -74,6 +101,8 @@ const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).sli
 export default function Game() {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const [prefs, updatePrefs] = usePrefs();
+  const nameData = useNameData(prefs.nameLanguage);
+  const nameLanguage = useMemo(() => ({ lang: prefs.nameLanguage, data: nameData }), [prefs.nameLanguage, nameData]);
   const sound = useSound(prefs);
   const [screen, setScreen] = useState<'lobby' | 'remote' | 'solo' | 'daily' | 'dex'>('lobby');
   // Today's date for the daily challenge: read on the client only, and again on return to the app.
@@ -121,6 +150,8 @@ export default function Game() {
   } | null>(null);
   const myIdRef = useRef(HOST_ID);
   const lobbyRef = useRef<Player[]>([]);
+  // Host: the team setting from the lobby screen, shared with guests as it changes.
+  const lobbyTeamsRef = useRef<{ on: boolean; chosen: Record<string, Team> }>({ on: false, chosen: {} });
 
   useEffect(() => {
     stateRef.current = state;
@@ -206,7 +237,7 @@ export default function Game() {
   };
 
   const nextPokemon = (s: GameState, fresh = false) =>
-    pickRandomPokemon(s.settings.difficulty, fresh ? [] : s.usedPokemonIds, s.settings);
+    pickForSettings(s.settings.difficulty, fresh ? [] : s.usedPokemonIds, s.settings, loadFavourites());
 
   // Remote rounds skip the pass-the-phone handoff, so their memorize countdown starts at once.
   const beginRoundTimers = useCallback((mode: GameState['mode']) => {
@@ -260,10 +291,14 @@ export default function Game() {
     (text: string) => {
       const s = stateRef.current;
       if (s.phase !== 'DRAWING' || !s.currentPokemon) return;
-      const correct = isCorrectGuess(text, s.currentPokemon.name);
-      dispatch({ type: 'ADD_CHAT_MESSAGE', message: { id: newId(), senderId: 'shared', sender: 'Guess', text, isCorrect: correct } });
-      if (correct) endRound('correct', isParty(s) ? null : undefined);
-      else sound.play('wrong');
+      const round = s.round;
+      judgeGuess(text, s.currentPokemon, (correct) => {
+        const now = stateRef.current;
+        if (now.phase !== 'DRAWING' || now.round !== round) return;
+        dispatch({ type: 'ADD_CHAT_MESSAGE', message: { id: newId(), senderId: 'shared', sender: 'Guess', text, isCorrect: correct } });
+        if (correct) endRound('correct', isParty(now) ? null : undefined);
+        else sound.play('wrong');
+      });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [endRound],
@@ -280,12 +315,16 @@ export default function Game() {
       const tally = guessCountRef.current[byId];
       guessCountRef.current[byId] = tally && tally.round === s.round ? { round: s.round, count: tally.count + 1 } : { round: s.round, count: 1 };
       if (guessCountRef.current[byId].count > MAX_GUESSES_PER_ROUND) return;
-      const correct = isCorrectGuess(text, s.currentPokemon.name);
-      dispatch({
-        type: 'ADD_CHAT_MESSAGE',
-        message: { id: newId(), senderId: byId, sender: guesser.nickname, text, isCorrect: correct },
+      const round = s.round;
+      judgeGuess(text, s.currentPokemon, (correct) => {
+        const now = stateRef.current;
+        if (now.phase !== 'DRAWING' || now.round !== round) return;
+        dispatch({
+          type: 'ADD_CHAT_MESSAGE',
+          message: { id: newId(), senderId: byId, sender: guesser.nickname, text, isCorrect: correct },
+        });
+        if (correct) endRound('correct', byId);
       });
-      if (correct) endRound('correct', byId);
     },
     [endRound],
   );
@@ -307,9 +346,16 @@ export default function Game() {
   /** Which player (or spectator) a phone is. */
   const viewerOf = (clientId: string) => clientPlayersRef.current.get(clientId) ?? SPECTATOR_ID;
 
+  /** Lobby only: the roster with the host's current team split applied, when team mode is on. */
+  const rosterWithTeams = (players: Player[]): Player[] => {
+    if (stateRef.current.phase !== 'LOBBY') return players;
+    const { on, chosen } = lobbyTeamsRef.current;
+    return on && players.length >= MIN_TEAM_PLAYERS ? withTeams(players, chosen) : players.map((p) => ({ ...p, team: undefined }));
+  };
+
   const lobbyMessage = (clientId: string, players: Player[]): Message => ({
     t: 'lobby',
-    players,
+    players: rosterWithTeams(players),
     youId: viewerOf(clientId),
     hostToken: (hostTokenRef.current ??= randomString(24)),
     spectators: spectatorsRef.current.size,
@@ -511,7 +557,7 @@ export default function Game() {
     }
   };
 
-  const room = useRoom(handleMessage, admit);
+  const room = useRoom(handleMessage, admit, (guestVersion) => setNotice(versionMismatchNotice(guestVersion)));
   useEffect(() => {
     roomRef.current = room;
     lobbyRef.current = lobbyPlayers;
@@ -667,11 +713,14 @@ export default function Game() {
         source: state.mode === 'remote' ? 'multi-phone' : 'one-phone',
         outcome,
         drawnAt: Date.now(),
+        ...(pokemon.shiny && { shiny: true }),
       },
       drawing.dataUrl,
     );
     const streak = Math.max(0, ...state.players.map((p) => guessStreak(state, p.id)));
-    updateProgress((st) => recordRound(st, { pokemonId: pokemon.id, outcome, quick: (drawing.leftFraction ?? 0) >= 2 / 3, streak }));
+    // One phone draws every round; on several phones only the drawer's own phone did.
+    const drawnHere = state.mode !== 'remote' || getDrawer(state)?.id === myId;
+    updateProgress((st) => recordRound(st, { pokemonId: pokemon.id, outcome, quick: (drawing.leftFraction ?? 0) >= 2 / 3, streak, shiny: pokemon.shiny, drawnHere }));
   }, [state, drawings, myId, updateProgress]);
 
   const recordedGameRef = useRef(false);
@@ -702,17 +751,25 @@ export default function Game() {
     sound.startBgm();
     clearRoundStrokes();
     setDrawings({});
-    dispatch({ type: 'START_GAME', mode: 'local', players, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
+    dispatch({ type: 'START_GAME', mode: 'local', players, settings, pokemon: pickForSettings(settings.difficulty, [], settings, loadFavourites()) });
   };
 
-  const startRemote = (settings: GameSettings) => {
-    if (!room.isHost || lobbyPlayers.length < 2) return;
+  const startRemote = (settings: GameSettings, players: Player[]) => {
+    if (!room.isHost || players.length < 2) return;
     sound.startBgm();
     clearRoundStrokes();
     setDrawings({});
-    dispatch({ type: 'START_GAME', mode: 'remote', players: lobbyPlayers, settings, pokemon: pickRandomPokemon(settings.difficulty, [], settings) });
+    dispatch({ type: 'START_GAME', mode: 'remote', players, settings, pokemon: pickForSettings(settings.difficulty, [], settings, loadFavourites()) });
     beginRoundTimers('remote');
   };
+
+  /** Host: the lobby's team setting changed; guests and TV screens get the new split at once. */
+  const shareTeamSetup = useCallback((on: boolean, chosen: Record<string, Team>) => {
+    lobbyTeamsRef.current = { on, chosen };
+    if (stateRef.current.phase !== 'LOBBY') return;
+    roomRef.current?.broadcast((id) => lobbyMessage(id, lobbyRef.current));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const hostRoom = (name: string, avatarId: number) => {
     sound.startBgm();
@@ -723,6 +780,7 @@ export default function Game() {
     myIdRef.current = HOST_ID;
     clientPlayersRef.current.clear();
     spectatorsRef.current.clear();
+    lobbyTeamsRef.current = { on: false, chosen: {} };
     void room.host();
   };
 
@@ -776,7 +834,7 @@ export default function Game() {
     if (!result || !drawing) return;
     const drawer = state.players.find((p) => p.id === result.drawerId)?.nickname ?? 'Someone';
     try {
-      const blob = await composeComparison(drawing.dataUrl, result.pokemon.artworkUrl, `${drawer} drew ${result.pokemon.name}`);
+      const blob = await composeComparison(drawing.dataUrl, revealArtworkUrl(result.pokemon), `${drawer} drew ${result.pokemon.name}`);
       const outcome = await shareOrDownload(blob, `${safeFilename(result.pokemon.name, 'by', drawer)}.png`, `${drawer} drew ${result.pokemon.name} in Who's That Pokémon?`);
       if (outcome === 'downloaded') setNotice('Image saved to your downloads.');
     } catch {
@@ -785,7 +843,10 @@ export default function Game() {
   };
 
   const shareScore = async () => {
-    const text = `Who's That Pokémon? — ${state.players.map((p) => `${p.nickname}: ${p.score}`).join(' | ')}`;
+    const scores = teamScores
+      ? [`${TEAM_NAMES.red}: ${teamScores.red}`, `${TEAM_NAMES.blue}: ${teamScores.blue}`]
+      : state.players.map((p) => `${p.nickname}: ${p.score}`);
+    const text = `Who's That Pokémon? — ${scores.join(' | ')}`;
     try {
       if (navigator.share) await navigator.share({ title: "Who's That Pokémon?", text });
       else {
@@ -813,6 +874,8 @@ export default function Game() {
   const shownHint = view === 'guesser' ? (room.isHost ? localHint : remoteHint) : view === 'local' ? localHint : null;
   const streaks = Object.fromEntries(state.players.map((p) => [p.id, guessStreak(state, p.id)]));
   const solver = state.players.find((p) => p.id === state.roundResults.at(-1)?.solvedBy) ?? null;
+  const teamScores = teamsActive(state) ? getTeamScores(state) : undefined;
+  const lastResult = state.roundResults.at(-1);
   const connectionTrouble = isRemote && !room.isHost && (room.status === 'reconnecting' || room.status === 'error');
   // Shown to everyone in a room (host and guests) from the lobby to the end of the game.
   const roomCode = room.code && (screen === 'remote' || isRemote) && room.status !== 'idle' ? room.code : null;
@@ -820,7 +883,7 @@ export default function Game() {
 
   if (spectating) {
     return (
-      <>
+      <NameLanguageContext value={nameLanguage}>
         <TVView
           state={state}
           code={room.code}
@@ -834,11 +897,12 @@ export default function Game() {
           connectionLost={room.status === 'reconnecting' || room.status === 'error'}
         />
         <Reactions items={reactions} />
-      </>
+      </NameLanguageContext>
     );
   }
 
   return (
+    <NameLanguageContext value={nameLanguage}>
     <div className="flex flex-col flex-1">
       <header className="pokedex-topbar gap-2">
         {/* On narrow phones the room code takes the title's place. */}
@@ -914,6 +978,7 @@ export default function Game() {
             onJoin={joinRoom}
             onStart={startRemote}
             onBack={goHome}
+            onTeamSetup={shareTeamSetup}
           />
         )}
 
@@ -964,6 +1029,8 @@ export default function Game() {
             canAssign={view === 'local' || view === 'drawer'}
             onAssign={assign}
             streaks={streaks}
+            teamScores={teamScores}
+            steal={!!teamScores && !!lastResult && isSteal(state, lastResult)}
             drawing={drawings[state.round]}
             onNext={() => act('next-round')}
             nextLabel={isGameFinished(state) ? 'See results' : 'Next round'}
@@ -976,6 +1043,8 @@ export default function Game() {
             winners={winners}
             players={state.players}
             roundResults={state.roundResults}
+            teamScores={teamScores}
+            winningTeams={getWinningTeams(state)}
             onRematch={() => act('rematch')}
             onNewGame={goHome}
             onOpenGallery={() => setGalleryOpen(true)}
@@ -1060,5 +1129,6 @@ export default function Game() {
         </div>
       )}
     </div>
+    </NameLanguageContext>
   );
 }

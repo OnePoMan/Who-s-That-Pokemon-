@@ -51,6 +51,18 @@ describe('stats', () => {
     ]);
   });
 
+  it('counts a miss only when this device drew the Pokémon and nobody guessed it', () => {
+    const base = { quick: false, streak: 0 };
+    let s = recordRound(EMPTY_STATS, { ...base, pokemonId: 25, outcome: 'timeout', drawnHere: true });
+    s = recordRound(s, { ...base, pokemonId: 25, outcome: 'skipped', drawnHere: true });
+    s = recordRound(s, { ...base, pokemonId: 25, outcome: 'correct', drawnHere: true });
+    s = recordRound(s, { ...base, pokemonId: 6, outcome: 'timeout', drawnHere: false });
+    s = recordRound(s, { ...base, pokemonId: 4, outcome: 'timeout' });
+    s = recordSolo(s, 1);
+    expect(s.missedCount).toEqual({ 25: 2 });
+    expect(s.drawnCount).toMatchObject({ 25: 3, 6: 1, 4: 1, 1: 1 });
+  });
+
   it('only counts online wins for multi-phone games', () => {
     let s = recordGame(EMPTY_STATS, { players: 6, online: false, won: true });
     s = recordGame(s, { players: 2, online: true, won: true });
@@ -76,6 +88,16 @@ describe('stats', () => {
     expect(awardAchievements(first.stats, 2000).unlocked).toEqual([]);
   });
 
+  it('awards Shiny Hunter for a shiny reveal, in rounds and solo drawings', () => {
+    const plain = recordRound(EMPTY_STATS, { pokemonId: 25, outcome: 'correct', quick: false, streak: 1 });
+    expect(awardAchievements(plain, 1).unlocked.map((a) => a.id)).not.toContain('shiny-hunter');
+    const shiny = recordRound(EMPTY_STATS, { pokemonId: 25, outcome: 'timeout', quick: false, streak: 0, shiny: true });
+    expect(shiny.shinySeen).toBe(1);
+    expect(awardAchievements(shiny, 1).unlocked.map((a) => a.id)).toContain('shiny-hunter');
+    expect(recordSolo(EMPTY_STATS, 25, true).shinySeen).toBe(1);
+    expect(parseStats({ shinySeen: 2 }).shinySeen).toBe(2);
+  });
+
   it('can unlock every badge', () => {
     const s = {
       ...EMPTY_STATS,
@@ -86,6 +108,7 @@ describe('stats', () => {
       quickDraws: 1,
       bestStreak: 5,
       soloDrawings: 10,
+      shinySeen: 1,
       discovered: DEX_ORDER.map((e) => e.id),
       daily: { ...EMPTY_STATS.daily, played: 7, best: 7 },
     };
@@ -104,6 +127,12 @@ describe('stats', () => {
     expect(s).toMatchObject({ gamesPlayed: 0, roundsPlayed: 0, discovered: [25], drawnCount: { 25: 2 }, achievements: { 'first-sketch': 5 } });
     expect(s.daily).toMatchObject({ last: null, streak: 4, result: { date: '2026-09-01', pokemonId: 25, drawingId: null } });
     expect(parseStats('nonsense')).toEqual(EMPTY_STATS);
+  });
+
+  it('reads stats saved before misses were counted, and drops malformed miss counts', () => {
+    expect(parseStats({ roundsPlayed: 4, drawnCount: { 25: 4 } }).missedCount).toEqual({});
+    expect(parseStats({ missedCount: { 25: 2, 999999: 4, 6: -1, 4: 'x' } }).missedCount).toEqual({ 25: 2 });
+    expect(parseStats({ missedCount: 'lots' }).missedCount).toEqual({});
   });
 
   it('lists all 1175 Pokémon and forms in the Pokédex', () => {

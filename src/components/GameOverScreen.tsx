@@ -1,14 +1,18 @@
 'use client';
 
-import type { Player, RoundResult } from '@/lib/game-state';
+import { TEAM_NAMES, type Player, type RoundResult, type Team } from '@/lib/game-state';
 import { AvatarIcon } from './AvatarPicker';
 import PokeBallButton from './PokeBallButton';
 import { listNames } from './MemorizePhase';
+import { TeamRosters, TeamScores } from './TeamPicker';
 
 interface GameOverScreenProps {
   winners: Player[];
   players: Player[];
   roundResults: RoundResult[];
+  /** Team mode: final team totals and the team(s) that won (both on a tie). */
+  teamScores?: Record<Team, number>;
+  winningTeams?: Team[];
   onRematch: () => void;
   onNewGame: () => void;
   onOpenGallery: () => void;
@@ -23,7 +27,7 @@ const OUTCOME_BADGE = {
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
-export default function GameOverScreen({ winners, players, roundResults, onRematch, onNewGame, onOpenGallery, onShare }: GameOverScreenProps) {
+export default function GameOverScreen({ winners, players, roundResults, teamScores, winningTeams = [], onRematch, onNewGame, onOpenGallery, onShare }: GameOverScreenProps) {
   const standings = [...players].sort((a, b) => b.score - a.score);
   const winnerIds = new Set(winners.map((w) => w.id));
   const nameOf = (id: string | null) => players.find((p) => p.id === id)?.nickname;
@@ -36,8 +40,21 @@ export default function GameOverScreen({ winners, players, roundResults, onRemat
         🏆
       </div>
       <h2 className="font-pixel text-base text-ink text-center leading-relaxed">
-        {winners.length > 1 ? `It's a tie! ${listNames(winners)} win!` : `${winners[0]?.nickname} wins!`}
+        {teamScores
+          ? winningTeams.length === 1
+            ? `${TEAM_NAMES[winningTeams[0]]} wins!`
+            : "It's a tie! Both teams win!"
+          : winners.length > 1
+            ? `It's a tie! ${listNames(winners)} win!`
+            : `${winners[0]?.nickname} wins!`}
       </h2>
+
+      {teamScores && (
+        <>
+          <TeamScores scores={teamScores} highlight={winningTeams} />
+          <TeamRosters players={players} />
+        </>
+      )}
 
       <ol className="w-full space-y-1.5" aria-label="Final standings">
         {standings.map((player) => {

@@ -1,7 +1,8 @@
 'use client';
 
 import { useId, useMemo, useRef, useState } from 'react';
-import { searchPokemonNames } from '@/lib/pokedex';
+import { searchNames } from '@/lib/pokemon-names';
+import { useNameLanguage } from '@/hooks/useNameData';
 import { MAX_GUESS_LENGTH } from '@/lib/net/protocol';
 
 interface GuessInputProps {
@@ -23,7 +24,8 @@ export default function GuessInput({ onGuess, disabled = false, placeholder = 'S
   // Slightly longer than the host's per-guess cooldown, so a quick second guess waits in the
   // box instead of being dropped. The input stays enabled so the phone keyboard stays open.
   const lastSubmitRef = useRef(-Infinity);
-  const suggestions = useMemo(() => searchPokemonNames(text, 8), [text]);
+  const { lang, data } = useNameLanguage();
+  const suggestions = useMemo(() => searchNames(text, lang, data, 8), [text, lang, data]);
   const showList = open && suggestions.length > 0 && !disabled;
 
   const submit = (value: string, at: number) => {
@@ -59,7 +61,7 @@ export default function GuessInput({ onGuess, disabled = false, placeholder = 'S
       className="relative w-full"
       onSubmit={(e) => {
         e.preventDefault();
-        submit(showList ? suggestions[highlight] : text, e.timeStamp);
+        submit(showList ? suggestions[highlight].text : text, e.timeStamp);
       }}
     >
       {showList && (
@@ -70,24 +72,25 @@ export default function GuessInput({ onGuess, disabled = false, placeholder = 'S
           aria-label="Matching Pokémon"
           className="absolute bottom-full mb-1 left-0 right-0 z-20 max-h-64 overflow-y-auto bg-surface rounded-xl border-3 border-line shadow-xl"
         >
-          {suggestions.map((name, i) => (
-            <li key={name} role="option" id={`${listId}-${i}`} aria-selected={i === highlight}>
+          {suggestions.map((s, i) => (
+            <li key={s.text} role="option" id={`${listId}-${i}`} aria-selected={i === highlight}>
               <button
                 type="button"
                 // Keep focus in the input so the keyboard stays up on phones.
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => submit(name, e.timeStamp)}
+                onClick={(e) => submit(s.text, e.timeStamp)}
                 className={`w-full text-left px-3 py-2.5 text-sm font-body font-semibold ${
                   i === highlight ? 'bg-pokemon-blue text-white' : 'text-ink hover:bg-surface-2'
                 }`}
               >
-                {name}
+                {s.text}
+                {s.english && <span className="ml-2 font-normal opacity-70">{s.english}</span>}
               </button>
             </li>
           ))}
         </ul>
       )}
-      <div className="flex rounded-xl border-3 border-line overflow-hidden bg-surface">
+      <div className="flex rounded-xl border-3 border-line overflow-hidden bg-surface focus-within:ring-2 focus-within:ring-pokemon-blue">
         <input
           type="text"
           role="combobox"

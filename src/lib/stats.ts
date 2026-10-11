@@ -24,10 +24,14 @@ export interface Stats {
   quickDraws: number;
   bestStreak: number;
   soloDrawings: number;
+  /** Shiny reveals seen. */
+  shinySeen: number;
   /** Pokémon IDs drawn at least once on this device. */
   discovered: number[];
   /** Pokémon ID → times drawn. */
   drawnCount: Record<number, number>;
+  /** Pokémon ID → times this device drew it and nobody guessed it (skipped or timed out). */
+  missedCount: Record<number, number>;
   daily: { last: string | null; streak: number; best: number; played: number; result: DailyResult | null };
   /** Achievement ID → when it was unlocked. */
   achievements: Record<string, number>;
@@ -43,8 +47,10 @@ export const EMPTY_STATS: Stats = {
   quickDraws: 0,
   bestStreak: 0,
   soloDrawings: 0,
+  shinySeen: 0,
   discovered: [],
   drawnCount: {},
+  missedCount: {},
   daily: { last: null, streak: 0, best: 0, played: 0, result: null },
   achievements: {},
 };
@@ -64,6 +70,10 @@ export function parseStats(raw: unknown): Stats {
   if (r.drawnCount && typeof r.drawnCount === 'object') {
     for (const [k, v] of Object.entries(r.drawnCount)) if (getPokemonInfo(Number(k)) && count(v)) drawn[Number(k)] = count(v);
   }
+  const missed: Record<number, number> = {};
+  if (r.missedCount && typeof r.missedCount === 'object') {
+    for (const [k, v] of Object.entries(r.missedCount)) if (getPokemonInfo(Number(k)) && count(v)) missed[Number(k)] = count(v);
+  }
   const achievements: Record<string, number> = {};
   if (r.achievements && typeof r.achievements === 'object') {
     for (const [k, v] of Object.entries(r.achievements)) if (ACHIEVEMENTS.some((a) => a.id === k)) achievements[k] = count(v);
@@ -78,8 +88,10 @@ export function parseStats(raw: unknown): Stats {
     quickDraws: count(r.quickDraws),
     bestStreak: count(r.bestStreak),
     soloDrawings: count(r.soloDrawings),
+    shinySeen: count(r.shinySeen),
     discovered: Array.isArray(r.discovered) ? [...new Set(r.discovered.filter((id) => typeof id === 'number' && getPokemonInfo(id)))] : [],
     drawnCount: drawn,
+    missedCount: missed,
     daily: {
       last: isDate(daily.last) ? daily.last : null,
       streak: count(daily.streak),
@@ -126,10 +138,17 @@ function discover(stats: Stats, pokemonId: number): Stats {
   };
 }
 
-export function recordRound(stats: Stats, round: { pokemonId: number; outcome: RoundOutcome; quick: boolean; streak: number }): Stats {
+/** `drawnHere`: this device was the drawer, so an unguessed round counts as a miss. */
+export function recordRound(
+  stats: Stats,
+  round: { pokemonId: number; outcome: RoundOutcome; quick: boolean; streak: number; shiny?: boolean; drawnHere?: boolean },
+): Stats {
   const next = discover(stats, round.pokemonId);
+  const miss = round.drawnHere === true && round.outcome !== 'correct';
   return {
     ...next,
+    missedCount: miss ? { ...next.missedCount, [round.pokemonId]: (next.missedCount[round.pokemonId] ?? 0) + 1 } : next.missedCount,
+    shinySeen: next.shinySeen + (round.shiny ? 1 : 0),
     roundsPlayed: next.roundsPlayed + 1,
     roundsGuessed: next.roundsGuessed + (round.outcome === 'correct' ? 1 : 0),
     quickDraws: next.quickDraws + (round.outcome === 'correct' && round.quick ? 1 : 0),
@@ -147,9 +166,9 @@ export function recordGame(stats: Stats, game: { players: number; online: boolea
   };
 }
 
-export function recordSolo(stats: Stats, pokemonId: number): Stats {
+export function recordSolo(stats: Stats, pokemonId: number, shiny = false): Stats {
   const next = discover(stats, pokemonId);
-  return { ...next, soloDrawings: next.soloDrawings + 1 };
+  return { ...next, soloDrawings: next.soloDrawings + 1, shinySeen: next.shinySeen + (shiny ? 1 : 0) };
 }
 
 /** A finished daily challenge; a second finish on the same date changes nothing. */
@@ -207,6 +226,7 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
   { id: 'champion', icon: '🏆', title: 'Champion', description: 'Win a game on several phones', progress: (s) => [s.onlineWins, 1] },
   { id: 'daily-1', icon: '📅', title: 'Daily Trainer', description: 'Finish a daily challenge', progress: (s) => [s.daily.played, 1] },
   { id: 'daily-7', icon: '🗓️', title: 'Week Streak', description: 'Finish the daily challenge 7 days in a row', progress: (s) => [s.daily.best, 7] },
+  { id: 'shiny-hunter', icon: '✨', title: 'Shiny Hunter', description: 'See a shiny Pokémon at a reveal', progress: (s) => [s.shinySeen, 1] },
   { id: 'solo-10', icon: '🖌️', title: 'Practice Makes Perfect', description: 'Finish 10 solo drawings', progress: (s) => [s.soloDrawings, 10] },
 ];
 

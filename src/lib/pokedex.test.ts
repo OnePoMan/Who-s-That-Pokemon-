@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { DEX_ORDER, cryUrl, getPokemon, getPokemonInfo, getPokemonPool, isCorrectGuess, normalizeName, pickRandomPokemon, searchPokemonNames, speciesOf } from './pokedex';
+import { describe, expect, it, vi } from 'vitest';
+import { DEX_ORDER, cryUrl, getPokemon, revealArtworkUrl, getPokemonInfo, getPokemonPool, isCorrectGuess, normalizeName, pickRandomPokemon, searchPokemonNames, speciesOf } from './pokedex';
 import { buildHint, hintStage } from './hints';
 
 describe('names', () => {
@@ -107,5 +107,19 @@ describe('cries', () => {
     const megaVenusaur = DEX_ORDER.find((e) => e.name === 'Mega Venusaur')!;
     expect(speciesOf(megaVenusaur.id)).toBe(3);
     expect(speciesOf(25)).toBe(25);
+  });
+
+  it('rolls shiny at 1 in 64 and uses the shiny artwork only for the reveal', () => {
+    const roll = vi.spyOn(Math, 'random');
+    roll.mockReturnValue(0.5 / 64);
+    const shiny = pickRandomPokemon('easy');
+    roll.mockReturnValue(0.99);
+    const plain = pickRandomPokemon('easy');
+    roll.mockRestore();
+    expect(shiny.shiny).toBe(true);
+    expect(plain.shiny).toBeUndefined();
+    expect(shiny.artworkUrl).toMatch(/official-artwork\/\d+\.png$/);
+    expect(revealArtworkUrl(shiny)).toMatch(new RegExp(`official-artwork/shiny/${shiny.id}\\.png$`));
+    expect(revealArtworkUrl(plain)).toBe(plain.artworkUrl);
   });
 });

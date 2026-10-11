@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import PokeBallButton from './PokeBallButton';
 import AvatarPicker, { AvatarIcon } from './AvatarPicker';
 import GameSettingsForm from './GameSettingsForm';
+import TeamPicker, { teamStartProblem, withTeams } from './TeamPicker';
 import { Logo } from './Lobby';
-import { DEFAULT_SETTINGS, type GameSettings, type Player } from '@/lib/game-state';
+import { DEFAULT_SETTINGS, MIN_TEAM_PLAYERS, type GameSettings, type Player, type Team } from '@/lib/game-state';
 import { MAX_NAME_LENGTH, ROOM_CODE_LENGTH, SPECTATOR_ID, normalizeRoomCode } from '@/lib/net/protocol';
 import { MAX_PLAYERS } from '@/lib/game-state';
 import { shareInvite } from '@/lib/share';
+import { useFavouritePoolEmpty } from '@/hooks/useFavourites';
 import type { RoomStatus } from '@/hooks/useRoom';
 
 interface RemoteLobbyProps {
@@ -24,20 +26,33 @@ interface RemoteLobbyProps {
   initialCode: string | null;
   onHost: (name: string, avatarId: number) => void;
   onJoin: (code: string, name: string, avatarId: number, asSpectator?: boolean) => void;
-  onStart: (settings: GameSettings) => void;
+  /** Players come back with their teams set when team mode is on. */
+  onStart: (settings: GameSettings, players: Player[]) => void;
   onBack: () => void;
+  /** Host: the team setting and the host's swaps, so the room can see them as they change. */
+  onTeamSetup?: (on: boolean, chosen: Record<string, Team>) => void;
 }
 
-export default function RemoteLobby({ status, error, code, isHost, players, spectators, myId, initialCode, onHost, onJoin, onStart, onBack }: RemoteLobbyProps) {
+export default function RemoteLobby({ status, error, code, isHost, players, spectators, myId, initialCode, onHost, onJoin, onStart, onBack, onTeamSetup }: RemoteLobbyProps) {
   const [name, setName] = useState('');
   const [avatarId, setAvatarId] = useState(1);
   const [joinCode, setJoinCode] = useState(initialCode ?? '');
   const [mode, setMode] = useState<'choose' | 'join'>(initialCode ? 'join' : 'choose');
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
   const [copied, setCopied] = useState(false);
+  const poolEmpty = useFavouritePoolEmpty(settings);
+  const [chosenTeams, setChosenTeams] = useState<Record<string, Team>>({});
 
   const inRoom = status !== 'idle' && status !== 'error';
   const nameOk = name.trim().length > 0;
+  const teamsOn = settings.teams && players.length >= MIN_TEAM_PLAYERS;
+  const teamProblem = teamsOn ? teamStartProblem(players, chosenTeams) : null;
+  // Tell the room (guests and TV screens) whenever the host changes the team setting or a swap.
+  const teamsSetting = settings.teams;
+  useEffect(() => {
+    if (isHost) onTeamSetup?.(teamsSetting, chosenTeams);
+  }, [isHost, teamsSetting, chosenTeams, onTeamSetup]);
+  const start = () => onStart({ ...settings, teams: teamsOn }, teamsOn ? withTeams(players, chosenTeams) : players);
   const validCode = normalizeRoomCode(joinCode);
   const roster = (
     <ul className="w-full space-y-1.5" aria-label="Players in the room">
@@ -91,12 +106,13 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
         </div>
 
         <GameSettingsForm settings={settings} onChange={setSettings} playerCount={Math.max(2, players.length)} />
+        {teamsOn && <TeamPicker players={players} chosen={chosenTeams} onChange={setChosenTeams} />}
 
         <div className="flex gap-3 w-full">
           <PokeBallButton onClick={onBack} variant="gray" size="md" className="flex-1">
             Leave
           </PokeBallButton>
-          <PokeBallButton onClick={() => onStart(settings)} variant="red" size="lg" className="flex-1" disabled={players.length < 2}>
+          <PokeBallButton onClick={start} variant="red" size="lg" className="flex-1" disabled={players.length < 2 || !!teamProblem || poolEmpty}>
             Start battle!
           </PokeBallButton>
         </div>
@@ -118,6 +134,7 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
                 {myId === SPECTATOR_ID ? `📺 This screen is watching ${host.nickname}'s room` : `You're in ${host.nickname}'s room`}
               </p>
               {roster}
+              {players.length >= MIN_TEAM_PLAYERS && players.every((p) => p.team) && <TeamPicker players={players} chosen={guestTeams(players)} readOnly />}
               <Spinner label={`Waiting for ${host.nickname} to start…`} />
             </>
           ) : (
@@ -208,6 +225,11 @@ export default function RemoteLobby({ status, error, code, isHost, players, spec
       )}
     </div>
   );
+}
+
+/** The teams the host sent with the lobby. */
+function guestTeams(players: Player[]): Record<string, Team> {
+  return Object.fromEntries(players.flatMap((p) => (p.team ? [[p.id, p.team]] : [])));
 }
 
 function Spinner({ label }: { label: string }) {
