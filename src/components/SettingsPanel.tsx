@@ -51,9 +51,13 @@ export default function SettingsPanel({ prefs, onChangePrefs, drawingCount, onOp
       {open && (
         <div
           id={menuId}
+          role="dialog"
+          aria-labelledby={`${menuId}-title`}
           className="absolute top-11 right-0 bg-surface rounded-xl shadow-xl border-3 border-line p-4 w-64 animate-fade-in z-50 font-body"
         >
-          <h3 className="text-sm font-bold text-ink mb-3">Settings</h3>
+          <h3 id={`${menuId}-title`} className="text-sm font-bold text-ink mb-3">
+            Settings
+          </h3>
           <div className="space-y-3">
             <AudioRow
               label="Music"
