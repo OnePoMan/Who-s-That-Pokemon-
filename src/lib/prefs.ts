@@ -1,6 +1,8 @@
 // Per-device preferences, kept in localStorage. Storage can be unavailable (private mode,
 // blocked site data), so every read and write is guarded and falls back to defaults.
 
+import { NAME_LANGUAGES, type NameLanguage } from './pokemon-names';
+
 export interface Prefs {
   bgmEnabled: boolean;
   sfxEnabled: boolean;
@@ -10,6 +12,8 @@ export interface Prefs {
   /** Play the Pokémon's cry when it is revealed. */
   cries: boolean;
   theme: Theme;
+  /** Language for guess suggestions and the reveal; English names are always accepted. */
+  nameLanguage: NameLanguage;
 }
 
 export type Theme = 'system' | 'light' | 'dark';
@@ -23,6 +27,7 @@ export const DEFAULT_PREFS: Prefs = {
   haptics: true,
   cries: true,
   theme: 'system',
+  nameLanguage: 'en',
 };
 
 const KEY = 'wtp-prefs';
@@ -42,6 +47,7 @@ export function loadPrefs(): Prefs {
       haptics: bool(raw.haptics, DEFAULT_PREFS.haptics),
       cries: bool(raw.cries, DEFAULT_PREFS.cries),
       theme: THEMES.includes(raw.theme) ? raw.theme : DEFAULT_PREFS.theme,
+      nameLanguage: NAME_LANGUAGES.some((l) => l.code === raw.nameLanguage) ? raw.nameLanguage : DEFAULT_PREFS.nameLanguage,
     };
   } catch {
     return DEFAULT_PREFS;

@@ -11,6 +11,8 @@ import { ScoreChip, type SavedDrawing } from './RevealPhase';
 import { getDrawer, getWinners, roundsInGame, type GameState } from '@/lib/game-state';
 import type { CanvasManager } from '@/lib/canvas-engine';
 import type { Hint } from '@/lib/hints';
+import { useNameLanguage } from '@/hooks/useNameData';
+import { localizedName } from '@/lib/pokemon-names';
 
 interface TVViewProps {
   state: GameState;
@@ -126,6 +128,8 @@ function TVReveal({ state, drawing }: { state: GameState; drawing: SavedDrawing 
     return () => clearTimeout(id);
   }, []);
   const pokemon = state.currentPokemon!;
+  const { lang, data } = useNameLanguage();
+  const localName = data && lang !== 'en' ? localizedName(pokemon.id, lang, data) : null;
   const solver = state.players.find((p) => p.id === state.roundResults.at(-1)?.solvedBy);
   const headline =
     state.outcome === 'correct' ? (solver ? `${solver.nickname} got it!` : 'Correct!') : state.outcome === 'skipped' ? 'Skipped' : "Time's up!";
@@ -133,7 +137,10 @@ function TVReveal({ state, drawing }: { state: GameState; drawing: SavedDrawing 
   return (
     <div className="flex flex-col items-center gap-4">
       <p className="font-pixel text-xl text-ink leading-relaxed">{headline}</p>
-      <p className="font-pixel text-lg text-accent h-8">{revealed ? `It's ${pokemon.name}!` : "Who's that Pokémon?"}</p>
+      <p className={`font-pixel text-lg text-accent ${localName ? 'min-h-14' : 'h-8'}`}>
+        {revealed ? `It's ${pokemon.name}!` : "Who's that Pokémon?"}
+        {revealed && localName && <span className="block font-body text-base text-ink-muted">{localName}</span>}
+      </p>
       <div className="flex justify-center gap-6">
         <div className={`${box} rounded-xl overflow-hidden border-4 border-line bg-white`}>
           {drawing && (

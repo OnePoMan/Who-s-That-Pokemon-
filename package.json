@@ -10,6 +10,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "generate:pokemon": "node scripts/generate-pokemon-data.mjs",
+    "generate:names": "node scripts/generate-pokemon-names.mjs",
     "generate:icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {

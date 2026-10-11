@@ -95,17 +95,23 @@ export function pickRandomPokemon(
 }
 
 /**
- * Folds a name to a comparable key: case, accents, gender symbols and punctuation are ignored,
- * so "mr mime", "Mr. Mime" and "MR-MIME" all match, as do "flabebe" and "Flabébé".
+ * Folds a name to a comparable key: case, accents, gender symbols, punctuation and width are
+ * ignored, so "mr mime", "Mr. Mime" and "MR-MIME" all match, as do "flabebe" and "Flabébé".
+ * It works for every supported language: full-width letters fold to half-width (NFKC), katakana
+ * folds to hiragana (ピカチュウ = ぴかちゅう), and Hangul and Han characters are kept.
  */
 export function normalizeName(name: string): string {
   return name
+    .normalize('NFKC')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFC')
     .replace(/♀/g, 'f')
     .replace(/♂/g, 'm')
+    .replace(/ß/g, 'ss')
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
+    .replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
 export function isCorrectGuess(guess: string, answer: string): boolean {

@@ -7,6 +7,8 @@ import RevealStage from './RevealStage';
 import DrawingReplay from './DrawingReplay';
 import { AvatarIcon } from './AvatarPicker';
 import PokeBallButton from './PokeBallButton';
+import { useNameLanguage } from '@/hooks/useNameData';
+import { localizedName } from '@/lib/pokemon-names';
 
 export interface SavedDrawing {
   dataUrl: string;
@@ -54,6 +56,8 @@ export default function RevealPhase({
   nextLabel,
   onShare,
 }: RevealPhaseProps) {
+  const { lang, data } = useNameLanguage();
+  const localName = data && lang !== 'en' ? localizedName(pokemon.id, lang, data) : null;
   const [revealed, setRevealed] = useState(false);
   const [replaying, setReplaying] = useState(false);
 
@@ -97,9 +101,12 @@ export default function RevealPhase({
         </div>
       )}
 
-      <div className="text-center h-8 flex items-center" aria-live="polite">
+      <div className={`text-center flex items-center ${localName ? 'min-h-12' : 'h-8'}`} aria-live="polite">
         {revealed ? (
-          <p className="font-pixel text-sm text-ink animate-fade-in leading-relaxed">It&apos;s {pokemon.name}!</p>
+          <div className="animate-fade-in">
+            <p className="font-pixel text-sm text-ink leading-relaxed">It&apos;s {pokemon.name}!</p>
+            {localName && <p className="font-body text-xs text-ink-muted">{localName}</p>}
+          </div>
         ) : (
           <p className="font-pixel text-[10px] text-ink-muted">Who&apos;s that Pokémon?</p>
         )}

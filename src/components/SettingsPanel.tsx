@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { THEMES, type Prefs } from '@/lib/prefs';
+import { NAME_LANGUAGES, type NameLanguage } from '@/lib/pokemon-names';
 
 interface SettingsPanelProps {
   prefs: Prefs;
@@ -17,6 +18,7 @@ export default function SettingsPanel({ prefs, onChangePrefs, drawingCount, onOp
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const languageId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -87,6 +89,24 @@ export default function SettingsPanel({ prefs, onChangePrefs, drawingCount, onOp
                 ))}
               </div>
             </fieldset>
+            <div>
+              <label htmlFor={languageId} className="text-sm font-semibold text-ink block mb-1">
+                Name language
+              </label>
+              <select
+                id={languageId}
+                value={prefs.nameLanguage}
+                onChange={(e) => onChangePrefs({ nameLanguage: e.target.value as NameLanguage })}
+                className="w-full rounded-lg border-2 border-line bg-surface text-ink text-sm py-1 px-2"
+              >
+                {NAME_LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-ink-muted mt-1">Guess suggestions and the reveal. English names always count.</p>
+            </div>
 
             <hr className="border-line/20" />
             <button
