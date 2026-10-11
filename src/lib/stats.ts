@@ -28,6 +28,8 @@ export interface Stats {
   discovered: number[];
   /** Pokémon ID → times drawn. */
   drawnCount: Record<number, number>;
+  /** Pokémon ID → times this device drew it and nobody guessed it (skipped or timed out). */
+  missedCount: Record<number, number>;
   daily: { last: string | null; streak: number; best: number; played: number; result: DailyResult | null };
   /** Achievement ID → when it was unlocked. */
   achievements: Record<string, number>;
@@ -45,6 +47,7 @@ export const EMPTY_STATS: Stats = {
   soloDrawings: 0,
   discovered: [],
   drawnCount: {},
+  missedCount: {},
   daily: { last: null, streak: 0, best: 0, played: 0, result: null },
   achievements: {},
 };
@@ -64,6 +67,10 @@ export function parseStats(raw: unknown): Stats {
   if (r.drawnCount && typeof r.drawnCount === 'object') {
     for (const [k, v] of Object.entries(r.drawnCount)) if (getPokemonInfo(Number(k)) && count(v)) drawn[Number(k)] = count(v);
   }
+  const missed: Record<number, number> = {};
+  if (r.missedCount && typeof r.missedCount === 'object') {
+    for (const [k, v] of Object.entries(r.missedCount)) if (getPokemonInfo(Number(k)) && count(v)) missed[Number(k)] = count(v);
+  }
   const achievements: Record<string, number> = {};
   if (r.achievements && typeof r.achievements === 'object') {
     for (const [k, v] of Object.entries(r.achievements)) if (ACHIEVEMENTS.some((a) => a.id === k)) achievements[k] = count(v);
@@ -80,6 +87,7 @@ export function parseStats(raw: unknown): Stats {
     soloDrawings: count(r.soloDrawings),
     discovered: Array.isArray(r.discovered) ? [...new Set(r.discovered.filter((id) => typeof id === 'number' && getPokemonInfo(id)))] : [],
     drawnCount: drawn,
+    missedCount: missed,
     daily: {
       last: isDate(daily.last) ? daily.last : null,
       streak: count(daily.streak),
@@ -126,10 +134,16 @@ function discover(stats: Stats, pokemonId: number): Stats {
   };
 }
 
-export function recordRound(stats: Stats, round: { pokemonId: number; outcome: RoundOutcome; quick: boolean; streak: number }): Stats {
+/** `drawnHere`: this device was the drawer, so an unguessed round counts as a miss. */
+export function recordRound(
+  stats: Stats,
+  round: { pokemonId: number; outcome: RoundOutcome; quick: boolean; streak: number; drawnHere?: boolean },
+): Stats {
   const next = discover(stats, round.pokemonId);
+  const miss = round.drawnHere === true && round.outcome !== 'correct';
   return {
     ...next,
+    missedCount: miss ? { ...next.missedCount, [round.pokemonId]: (next.missedCount[round.pokemonId] ?? 0) + 1 } : next.missedCount,
     roundsPlayed: next.roundsPlayed + 1,
     roundsGuessed: next.roundsGuessed + (round.outcome === 'correct' ? 1 : 0),
     quickDraws: next.quickDraws + (round.outcome === 'correct' && round.quick ? 1 : 0),

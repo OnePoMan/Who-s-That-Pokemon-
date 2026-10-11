@@ -195,6 +195,8 @@ function validateSettings(s: unknown): GameSettings | null {
     hints: s.hints,
     generations,
     types,
+    // Absent from older hosts.
+    favouritesOnly: s.favouritesOnly === true,
   };
 }
 

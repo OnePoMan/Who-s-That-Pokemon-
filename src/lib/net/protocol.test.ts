@@ -49,6 +49,15 @@ describe('wire state', () => {
     const msg = validateMessage({ t: 'state', state: toWire(state, 'p1', 10_000) });
     expect(msg?.t).toBe('state');
   });
+
+  it('carries the favourites-only setting, defaulting to off for older hosts', () => {
+    const on = validateMessage({ t: 'state', state: toWire({ ...state, settings: { ...DEFAULT_SETTINGS, favouritesOnly: true } }, 'p1', 10_000) });
+    expect(on?.t === 'state' && on.state.settings.favouritesOnly).toBe(true);
+    const legacy: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+    delete legacy.favouritesOnly;
+    const old = validateMessage({ t: 'state', state: { ...toWire(state, 'p1', 10_000), settings: legacy } });
+    expect(old?.t === 'state' && old.state.settings.favouritesOnly).toBe(false);
+  });
 });
 
 describe('validateMessage', () => {

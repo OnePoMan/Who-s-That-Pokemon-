@@ -5,6 +5,7 @@ import PokeBallButton from './PokeBallButton';
 import AvatarPicker, { AvatarIcon, TRAINERS } from './AvatarPicker';
 import GameSettingsForm from './GameSettingsForm';
 import { DEFAULT_SETTINGS, MAX_PLAYERS, MIN_PLAYERS, type GameSettings, type Player } from '@/lib/game-state';
+import { useFavouritePoolEmpty } from '@/hooks/useFavourites';
 import { MAX_NAME_LENGTH } from '@/lib/net/protocol';
 
 interface LobbyProps {
@@ -35,6 +36,7 @@ export default function Lobby({ onStartLocal, onRemote, onDaily, onSolo, onPoked
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
 
+  const poolEmpty = useFavouritePoolEmpty(settings);
   const namesReady = drafts.every((d) => d.name.trim().length > 0);
   const update = (key: number, patch: Partial<Draft>) => setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
 
@@ -160,7 +162,7 @@ export default function Lobby({ onStartLocal, onRemote, onDaily, onSolo, onPoked
             <PokeBallButton onClick={() => setStep('players')} variant="gray" size="md" className="flex-1">
               Back
             </PokeBallButton>
-            <PokeBallButton onClick={start} variant="red" size="lg" className="flex-1">
+            <PokeBallButton onClick={start} variant="red" size="lg" className="flex-1" disabled={poolEmpty}>
               Start battle!
             </PokeBallButton>
           </div>

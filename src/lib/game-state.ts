@@ -44,6 +44,8 @@ export interface GameSettings {
   generations: number[];
   /** Empty = all types. */
   types: string[];
+  /** Pick only from the host's starred Pokémon (picking happens on the host). */
+  favouritesOnly: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   hints: true,
   generations: [],
   types: [],
+  favouritesOnly: false,
 };
 
 export interface RoundResult {
