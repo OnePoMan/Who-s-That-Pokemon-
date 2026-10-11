@@ -42,7 +42,7 @@ npm run typecheck
 npm run build
 ```
 
-Requires Node 20.9+. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests, build and `npm audit` on every pull request.
+Requires Node 20.9+. CI (`.github/workflows/ci.yml`) runs lint, type-check, tests, build, Playwright end-to-end tests and `npm audit` of production dependencies on every pull request.
 
 ### Data and assets
 
